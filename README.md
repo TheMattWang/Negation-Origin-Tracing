@@ -24,19 +24,28 @@ We test **where negation lives** in small, CPU-friendly LMs by:
 
 ---
 
+Here’s an updated version that accurately reflects your current plan (using **CSD Negation** for evaluation while noting bias considerations):
+
+---
+
 ## Dataset
+
 We study **polarity classification** with and without negation using:
-- **SST-2**: Standard sentiment classification dataset.
-- **Negation-augmented subset**: Lightly edited sentences (e.g., *“good” → “not good”*) with human spot checks.
+
+* **SST-2**: The standard sentiment classification dataset from GLUE, used for training and baseline evaluation.
+* **CSD Negation Subset**: A curated contrastive dataset from the *Contrastive Sentiment Data (CSD)* corpus, containing human-verified negated counterparts of sentiment phrases (e.g., *“good” → “not good”*, *“bad” → “not bad”*). Used primarily for **testing model robustness to negation**.
 
 **Data splits**
-| Dataset | Train | Dev | Test |
-|----------|-------|-----|------|
-| SST-2 | 10,000 | 2,000 | 2,000 |
-| Negation set | 8,000 | 1,000 | 1,000 |
 
-**Optional transfer tests**: 1,000–2,000 examples from **HANS** or **ANLI**.  
-We report: percentage negated, average sentence length, and vocabulary size.
+| Dataset      | Train  | Dev   | Test  |
+| ------------ | ------ | ----- | ----- |
+| SST-2        | 10,000 | 2,000 | 2,000 |
+| CSD Negation | —      | —     | 2,000 |
+
+**Optional transfer tests**: 1,000–2,000 examples from **HANS** or **ANLI**.
+
+We report: percentage of negated samples, average sentence length, and vocabulary size.
+⚠️ *Note:* The CSD Negation subset is balanced across negation types (e.g., “not good” and “not bad”), which can introduce mild bias toward negated negatives. For naturalistic analysis, we rely on SST-2 and use CSD primarily as a controlled contrastive benchmark.
 
 ---
 
