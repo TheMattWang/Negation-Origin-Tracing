@@ -48,6 +48,23 @@ def get_parser() -> argparse.ArgumentParser:
         default="data/raw",
         help="Root directory containing train/validation/test parquet files.",
     )
+    parser.add_argument(
+        "--max_length",
+        type=int,
+        default=128,
+        help="Maximum sequence length for tokenization.",
+    )
+    parser.add_argument(
+        "--num_workers",
+        type=int,
+        default=4,
+        help="Number of workers for data loading.",
+    )
+    parser.add_argument(
+        "--use_negation_dataset",
+        action="store_true",
+        help="Use CSD Negation dataset for testing (if available).",
+    )
 
     # ----- Model -----
     parser.add_argument(

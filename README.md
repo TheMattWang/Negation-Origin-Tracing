@@ -79,6 +79,140 @@ We evaluate with:
 
 ---
 
+---
+
+## Usage
+
+### Setup
+
+1. **Install dependencies:**
+   ```bash
+   conda env create -f environment.yml
+   conda activate not
+   pip install torch lightning transformers datasets pandas pyarrow
+   ```
+
+2. **Download data:**
+   ```bash
+   python src/data/download.py
+   ```
+   This will download SST-2 and CSD Negation datasets to `data/raw/`.
+
+### Training
+
+#### Fine-tune Full Model
+
+Fine-tune DistilBERT on SST-2 for sentiment classification:
+
+```bash
+python src/scripts/train.py \
+    --mode finetune \
+    --experiment_name sst2_finetune \
+    --max_epochs 3 \
+    --batch_size 32 \
+    --lr 2e-5 \
+    --data_dir data/raw
+```
+
+#### Train Linear Probes
+
+Train linear probes on frozen model representations:
+
+**Probe a specific layer:**
+```bash
+python src/scripts/train.py \
+    --mode probe \
+    --experiment_name probe_layer5 \
+    --probe_layer 5 \
+    --pooling_strategy cls \
+    --probe_lr 1e-3 \
+    --batch_size 32 \
+    --max_epochs 10
+```
+
+**Probe all layers:**
+```bash
+python src/scripts/train.py \
+    --mode probe \
+    --experiment_name probe_all_layers \
+    --pooling_strategy mean \
+    --probe_lr 1e-3
+```
+
+**Available pooling strategies:**
+- `cls`: Use [CLS] token representation
+- `mean`: Mean pooling over sequence (masked)
+- `token`: Pool around "not" token position
+
+### Evaluation
+
+Test a trained model:
+
+```bash
+python src/scripts/test.py \
+    --ckpt_path experiments/runs/sst2_finetune/checkpoints/best.ckpt \
+    --data_dir data/raw \
+    --batch_size 32
+```
+
+### Inference
+
+Run inference on new text:
+
+```bash
+# Single text
+python src/scripts/predict.py \
+    --ckpt_path experiments/runs/sst2_finetune/checkpoints/best.ckpt \
+    --text "This movie is not good"
+
+# From file
+python src/scripts/predict.py \
+    --ckpt_path experiments/runs/sst2_finetune/checkpoints/best.ckpt \
+    --text_file input.txt \
+    --output_file predictions.txt
+```
+
+### Command-Line Arguments
+
+**Common arguments:**
+- `--mode`: `finetune` or `probe`
+- `--experiment_name`: Name for logging/checkpoint folders
+- `--model_name`: HuggingFace model (default: `distilbert-base-uncased`)
+- `--data_dir`: Data directory (default: `data/raw`)
+- `--batch_size`: Batch size (default: 32)
+- `--max_epochs`: Training epochs (default: 3)
+- `--lr`: Learning rate for finetune (default: 2e-5)
+- `--seed`: Random seed (default: 42)
+
+**Probe-specific arguments:**
+- `--probe_layer`: Layer index to probe (None = all layers)
+- `--pooling_strategy`: `cls`, `mean`, or `token` (default: `cls`)
+- `--probe_lr`: Learning rate for probes (default: 1e-3)
+
+**Hardware:**
+- `--devices`: Number of GPUs/CPUs (default: 1)
+- `--precision`: Training precision `16` or `32` (default: 32)
+
+### Output Structure
+
+```
+experiments/
+└── runs/
+    └── <experiment_name>/
+        ├── checkpoints/
+        │   ├── best.ckpt
+        │   ├── last.ckpt
+        │   └── epoch=XX-val_loss=X.XXX.ckpt
+        └── events.out.tfevents.*  # TensorBoard logs
+```
+
+View training metrics:
+```bash
+tensorboard --logdir experiments/runs
+```
+
+---
+
 ## Summary
 This project combines **probing and causal tracing** to identify and validate where negation emerges in small LMs.  
 The ultimate goal: improve reliability and interpretability of lightweight models suitable for **low-compute, real-world deployment**.
