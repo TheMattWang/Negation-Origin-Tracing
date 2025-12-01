@@ -63,8 +63,14 @@ We report: percentage of negated samples, average sentence length, and vocabular
    - Representation-shuffled probes  
    - Random-site/dimension interventions  
 
-**Metrics:** Probe accuracy by layer, label-flip rates, and logit deltas under intervention.  
-Results are compared against a **BERT-base reference**.
+**Metrics:** 
+- Probe accuracy and AUROC by layer
+- Label-flip rates under activation patching
+- Logit deltas under targeted ablation
+- Confusion matrices (split by negated vs. non-negated)
+- Macro-F1 scores
+
+Results are compared against a **BERT-base reference** (planned for Phase 2).
 
 ---
 
@@ -85,11 +91,13 @@ We evaluate with:
 
 ### Setup
 
+#### Option 1: Local Setup
+
 1. **Install dependencies:**
    ```bash
    conda env create -f environment.yml
    conda activate not
-   pip install torch lightning transformers datasets pandas pyarrow
+   pip install -r requirements.txt
    ```
 
 2. **Download data:**
@@ -98,7 +106,56 @@ We evaluate with:
    ```
    This will download SST-2 and CSD Negation datasets to `data/raw/`.
 
-### Training
+#### Option 2: Google Colab (Recommended)
+
+1. **Clone repository in Colab:**
+   ```python
+   !git clone https://github.com/TheMattWang/Negation-Origin-Tracing.git
+   %cd Negation-Origin-Tracing
+   ```
+
+2. **Run notebooks in order:**
+   - `notebooks/00_setup_colab.ipynb` - Setup environment and install dependencies
+   - `notebooks/01_download_data.ipynb` - Download datasets
+   - `notebooks/02_layer_search.ipynb` - Automated layer search
+   - `notebooks/03_visualize_results.ipynb` - Generate visualizations
+   - `notebooks/04_full_experiment.ipynb` - Complete experiment pipeline
+
+   See `COLAB_SETUP.md` for detailed instructions.
+
+### Quick Start: Complete Experiment Pipeline
+
+Run the complete experiment pipeline (recommended):
+
+```bash
+python src/scripts/run_full_experiment.py \
+    --output_dir experiments/full_experiment \
+    --layers all \
+    --pooling_strategies all \
+    --max_epochs 10
+```
+
+This will:
+1. Train probes on all layers with all pooling strategies
+2. Generate visualizations
+3. Run causal interventions on top layers
+4. Generate interpretation report
+
+### Automated Layer Search
+
+Search across all layers to find where negation is represented:
+
+```bash
+python src/scripts/search_layers.py \
+    --output_dir experiments/layer_search \
+    --layers all \
+    --pooling_strategies all \
+    --max_epochs 10
+```
+
+This trains probes on all layers and saves results for analysis.
+
+### Training Individual Models
 
 #### Fine-tune Full Model
 
@@ -143,6 +200,59 @@ python src/scripts/train.py \
 - `cls`: Use [CLS] token representation
 - `mean`: Mean pooling over sequence (masked)
 - `token`: Pool around "not" token position
+
+### Visualization and Analysis
+
+Generate visualizations from layer search results:
+
+```bash
+python src/engine/visualization.py \
+    --results_path experiments/layer_search/results_summary.json \
+    --output_dir experiments/layer_search/visualizations
+```
+
+This creates:
+- Layer performance plots (accuracy/AUROC by layer)
+- Pooling strategy comparisons
+- Performance heatmaps
+- Best layers visualization
+
+### Causal Interventions
+
+Run causal intervention experiments:
+
+```bash
+python src/scripts/run_interventions.py \
+    --model_ckpt experiments/runs/probe_layer5/checkpoints/best.ckpt \
+    --mode probe \
+    --probe_layer 5 \
+    --data_path data/raw/test/negation.parquet \
+    --intervention_type all \
+    --layers all \
+    --output_dir experiments/interventions
+```
+
+Intervention types:
+- `activation_patching`: Swap hidden states between negated/non-negated pairs
+- `ablation`: Zero out or project out specific dimensions
+- `control`: Random and shuffled interventions for comparison
+
+### Results Interpretation
+
+Generate interpretation report from probe and intervention results:
+
+```bash
+python src/engine/interpretation.py \
+    --probe_results experiments/layer_search/results_summary.json \
+    --intervention_results experiments/interventions/intervention_results.json \
+    --output experiments/interpretation_report.json \
+    --top_k 5
+```
+
+This identifies:
+- Most important layers for negation (composite scoring)
+- Causal verification (whether layers actually drive predictions)
+- Recommendations for further analysis
 
 ### Evaluation
 
@@ -197,13 +307,23 @@ python src/scripts/predict.py \
 
 ```
 experiments/
+├── layer_search/
+│   ├── results_summary.json          # All probe results
+│   ├── results_summary.csv           # CSV format
+│   ├── visualizations/               # Generated plots
+│   └── layer_*/pooling_*/            # Individual probe checkpoints
+├── full_experiment/
+│   ├── results_summary.json
+│   ├── visualizations/
+│   ├── interventions/                # Intervention results
+│   └── interpretation_report.json    # Final analysis
 └── runs/
     └── <experiment_name>/
         ├── checkpoints/
         │   ├── best.ckpt
         │   ├── last.ckpt
         │   └── epoch=XX-val_loss=X.XXX.ckpt
-        └── events.out.tfevents.*  # TensorBoard logs
+        └── events.out.tfevents.*     # TensorBoard logs
 ```
 
 View training metrics:
@@ -211,8 +331,54 @@ View training metrics:
 tensorboard --logdir experiments/runs
 ```
 
+### Key Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `src/scripts/run_full_experiment.py` | Complete end-to-end pipeline |
+| `src/scripts/search_layers.py` | Automated layer search |
+| `src/scripts/train.py` | Train individual models/probes |
+| `src/scripts/run_interventions.py` | Run causal interventions |
+| `src/scripts/test.py` | Evaluate trained models |
+| `src/scripts/predict.py` | Inference on new text |
+| `src/engine/visualization.py` | Generate plots |
+| `src/engine/interpretation.py` | Interpret results |
+
 ---
+
+## Project Status
+
+### ✅ Completed (Phase 1)
+- Data pipeline (SST-2, CSD Negation)
+- Model training (finetune and probe modes)
+- Automated layer search across all layers
+- Visualization tools (plots, heatmaps, comparisons)
+- Causal interventions (activation patching, ablation, controls)
+- Metrics (accuracy, AUROC, F1, label-flip rates, logit deltas)
+- Results interpretation and layer identification
+- Complete experiment pipeline
+- Jupyter notebooks for Google Colab
+
+### 🚧 Planned (Phase 2)
+- HANS/ANLI dataset support
+- Transfer evaluation across datasets
+- Probe vs fine-tuned model comparison
+- BERT-base reference comparison
+- Sparse probe implementation (L1/L2 regularization)
+- Advanced visualization and comparison tools
 
 ## Summary
 This project combines **probing and causal tracing** to identify and validate where negation emerges in small LMs.  
 The ultimate goal: improve reliability and interpretability of lightweight models suitable for **low-compute, real-world deployment**.
+
+## Citation
+
+If you use this code, please cite:
+```bibtex
+@misc{negation-origin-tracing,
+  title={Finding Where Negation Lives: Sparse Probing + Causal Tracing in Small Language Models},
+  author={Your Name},
+  year={2024},
+  url={https://github.com/TheMattWang/Negation-Origin-Tracing}
+}
+```

@@ -279,16 +279,22 @@ class BaseModule(L.LightningModule):
         labels = batch["labels"]
         acc = (preds == labels).float().mean()
         
+        # Compute AUROC
+        from src.engine.metrics import compute_auroc
+        auroc = compute_auroc(logits, labels)
+        
         self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("val_acc", acc, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val_auroc", auroc, on_step=False, on_epoch=True, prog_bar=True)
         
         self.val_step_outputs.append({
             "loss": loss.detach(),
             "preds": preds.detach(),
-            "labels": labels.detach()
+            "labels": labels.detach(),
+            "logits": logits.detach()
         })
         
-        return {"loss": loss, "preds": preds, "labels": labels}
+        return {"loss": loss, "preds": preds, "labels": labels, "logits": logits}
     
     def test_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
         """Test step."""
@@ -300,16 +306,22 @@ class BaseModule(L.LightningModule):
         labels = batch["labels"]
         acc = (preds == labels).float().mean()
         
+        # Compute AUROC
+        from src.engine.metrics import compute_auroc
+        auroc = compute_auroc(logits, labels)
+        
         self.log("test_loss", loss, on_step=False, on_epoch=True)
         self.log("test_acc", acc, on_step=False, on_epoch=True)
+        self.log("test_auroc", auroc, on_step=False, on_epoch=True)
         
         self.test_step_outputs.append({
             "loss": loss.detach(),
             "preds": preds.detach(),
-            "labels": labels.detach()
+            "labels": labels.detach(),
+            "logits": logits.detach()
         })
         
-        return {"loss": loss, "preds": preds, "labels": labels}
+        return {"loss": loss, "preds": preds, "labels": labels, "logits": logits}
     
     def on_train_epoch_end(self):
         """Called at the end of training epoch."""
