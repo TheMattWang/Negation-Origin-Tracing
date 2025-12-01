@@ -312,7 +312,11 @@ class InterventionMetrics:
     """
     
     def __init__(self):
-        self.metrics = defaultdict(list)
+        self.metrics = defaultdict(list)  # Store all individual results
+    
+    def get_all_results(self) -> Dict:
+        """Get all individual results (not just summaries)."""
+        return dict(self.metrics)
     
     def add_result(
         self,

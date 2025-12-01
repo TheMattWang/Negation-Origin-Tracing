@@ -337,11 +337,32 @@ def main():
     
     # Save to JSON
     import json
-    output_path = os.path.join(args.output_dir, "intervention_results.json")
-    with open(output_path, "w") as f:
-        json.dump(summary, f, indent=2)
     
-    print(f"Results saved to {output_path}")
+    # Save summary statistics
+    summary_path = os.path.join(args.output_dir, "intervention_results.json")
+    with open(summary_path, "w") as f:
+        json.dump(summary, f, indent=2)
+    print(f"✓ Summary saved to {summary_path}")
+    
+    # Also save full detailed results for deeper analysis
+    detailed_results = {
+        "experiment_type": "detailed_results",
+        "all_experiments": dict(metrics.metrics),  # Save all individual results
+        "summary": summary,
+        "config": {
+            "model_ckpt": args.model_ckpt,
+            "model_name": args.model_name,
+            "mode": args.mode,
+            "probe_layer": args.probe_layer,
+            "intervention_type": args.intervention_type,
+            "layers_tested": layers_to_test,
+            "batch_size": args.batch_size,
+        }
+    }
+    detailed_path = os.path.join(args.output_dir, "intervention_results_detailed.json")
+    with open(detailed_path, "w") as f:
+        json.dump(detailed_results, f, indent=2, default=str)  # default=str for any non-serializable types
+    print(f"✓ Detailed results saved to {detailed_path}")
     
     # Print summary
     print("\nSummary:")
