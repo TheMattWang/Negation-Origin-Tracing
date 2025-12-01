@@ -43,7 +43,24 @@ class SentimentDataset(Dataset):
         
         # Store texts and labels
         self.texts = self.data[text_column].tolist()
-        self.labels = self.data[label_column].tolist()
+        raw_labels = self.data[label_column].tolist()
+        
+        # Normalize labels to 0-indexed (handle cases where labels are 1-2 instead of 0-1)
+        unique_labels = sorted(set(raw_labels))
+        if len(unique_labels) == 2:
+            # Map labels to 0 and 1
+            label_map = {unique_labels[0]: 0, unique_labels[1]: 1}
+            self.labels = [label_map[label] for label in raw_labels]
+        else:
+            # If more than 2 unique labels, use them as-is but validate
+            self.labels = [int(label) for label in raw_labels]
+            min_label, max_label = min(self.labels), max(self.labels)
+            if min_label < 0 or max_label >= len(unique_labels):
+                raise ValueError(
+                    f"Labels out of range: min={min_label}, max={max_label}, "
+                    f"expected range [0, {len(unique_labels)-1}]. "
+                    f"Unique labels found: {unique_labels}"
+                )
         
     def __len__(self) -> int:
         return len(self.texts)
@@ -54,6 +71,10 @@ class SentimentDataset(Dataset):
         """
         text = str(self.texts[idx])
         label = int(self.labels[idx])
+        
+        # Validate label is in valid range
+        if label < 0 or label >= 2:  # SST-2 has 2 classes (0 and 1)
+            raise ValueError(f"Invalid label {label} at index {idx}. Expected 0 or 1.")
         
         # Tokenize
         encoding = self.tokenizer(
@@ -114,7 +135,24 @@ class NegationPairDataset(Dataset):
             raise ValueError(f"Column '{label_column}' not found in data. Available columns: {self.data.columns.tolist()}")
         
         self.texts = self.data[text_column].tolist()
-        self.labels = self.data[label_column].tolist()
+        raw_labels = self.data[label_column].tolist()
+        
+        # Normalize labels to 0-indexed (handle cases where labels are 1-2 instead of 0-1)
+        unique_labels = sorted(set(raw_labels))
+        if len(unique_labels) == 2:
+            # Map labels to 0 and 1
+            label_map = {unique_labels[0]: 0, unique_labels[1]: 1}
+            self.labels = [label_map[label] for label in raw_labels]
+        else:
+            # If more than 2 unique labels, use them as-is but validate
+            self.labels = [int(label) for label in raw_labels]
+            min_label, max_label = min(self.labels), max(self.labels)
+            if min_label < 0 or max_label >= len(unique_labels):
+                raise ValueError(
+                    f"Labels out of range: min={min_label}, max={max_label}, "
+                    f"expected range [0, {len(unique_labels)-1}]. "
+                    f"Unique labels found: {unique_labels}"
+                )
         
         # Store pair IDs if available
         if pair_id_column and pair_id_column in self.data.columns:
@@ -131,6 +169,10 @@ class NegationPairDataset(Dataset):
         """
         text = str(self.texts[idx])
         label = int(self.labels[idx])
+        
+        # Validate label is in valid range
+        if label < 0 or label >= 2:  # SST-2 has 2 classes (0 and 1)
+            raise ValueError(f"Invalid label {label} at index {idx}. Expected 0 or 1.")
         
         # Tokenize
         encoding = self.tokenizer(
