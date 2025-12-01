@@ -106,21 +106,41 @@ PYTHON_CMD="${PYTHON_CMD:-python}"
 echo -e "${GREEN}Using Python: $PYTHON_CMD${NC}"
 echo -e "${GREEN}Python path: $(which $PYTHON_CMD)${NC}"
 
-# Detect GPU availability
-echo -e "\n${YELLOW}Checking GPU availability...${NC}"
+# Detect hardware availability (GPU, TPU, or CPU)
+echo -e "\n${YELLOW}Checking hardware availability...${NC}"
+
+# Check for TPU first (requires torch_xla)
+TPU_CHECK=$($PYTHON_CMD -c "
+try:
+    import torch_xla.core.xla_model as xm
+    print('tpu')
+except ImportError:
+    print('no_tpu')
+" 2>/dev/null || echo "no_tpu")
+
+# Check for GPU (CUDA)
 GPU_CHECK=$($PYTHON_CMD -c "import torch; print('cuda' if torch.cuda.is_available() else 'cpu')" 2>/dev/null || echo "cpu")
-if [ "$GPU_CHECK" = "cuda" ]; then
+
+if [ "$TPU_CHECK" = "tpu" ]; then
+    echo -e "${GREEN}✓ TPU detected${NC}"
+    echo -e "${YELLOW}Note: TPU support requires PyTorch Lightning accelerator='tpu'${NC}"
+    DEVICE="tpu"
+    DEVICES=1
+    ACCELERATOR="tpu"
+elif [ "$GPU_CHECK" = "cuda" ]; then
     GPU_NAME=$($PYTHON_CMD -c "import torch; print(torch.cuda.get_device_name(0))" 2>/dev/null || echo "Unknown")
     GPU_MEM=$($PYTHON_CMD -c "import torch; print(f'{torch.cuda.get_device_properties(0).total_memory / 1e9:.2f}')" 2>/dev/null || echo "Unknown")
     echo -e "${GREEN}✓ GPU detected: $GPU_NAME (${GPU_MEM} GB)${NC}"
     DEVICE="cuda"
     DEVICES=1
+    ACCELERATOR="gpu"
 else
-    echo -e "${YELLOW}⚠ No GPU detected - will use CPU (much slower)${NC}"
+    echo -e "${YELLOW}⚠ No GPU/TPU detected - will use CPU (much slower)${NC}"
     DEVICE="cpu"
     DEVICES=1
+    ACCELERATOR="cpu"
 fi
-echo -e "${YELLOW}Using device: $DEVICE${NC}\n"
+echo -e "${YELLOW}Using device: $DEVICE (accelerator: $ACCELERATOR)${NC}\n"
 
 # Create output directory
 mkdir -p "$OUTPUT_DIR"
