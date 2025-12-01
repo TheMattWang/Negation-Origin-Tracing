@@ -4,6 +4,8 @@ Trains probes on all layers with different pooling strategies and saves results.
 """
 
 import os
+import sys
+from pathlib import Path
 import json
 import argparse
 import torch
@@ -12,6 +14,9 @@ from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
 from lightning.pytorch.loggers import TensorBoardLogger
 from transformers import AutoModel
 import pandas as pd
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.models import BaseModule
 from src.datasets import NOTDataModule

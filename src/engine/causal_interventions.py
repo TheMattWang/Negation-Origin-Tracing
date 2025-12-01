@@ -65,15 +65,33 @@ class ActivationPatcher:
         
         return hook
     
+    def _get_encoder_layer(self, layer_idx: int):
+        """
+        Get the underlying encoder layer for a variety of HF model wrappers
+        (plain encoders and classification models).
+        """
+        m = self.model
+        # DistilBERT base model or similar
+        if hasattr(m, "transformer"):
+            return m.transformer.layer[layer_idx]
+        # BERT / RoBERTa style encoders
+        if hasattr(m, "encoder"):
+            return m.encoder.layer[layer_idx]
+        # DistilBERT *classification* model: distilbert.transformer.layer
+        if hasattr(m, "distilbert") and hasattr(m.distilbert, "transformer"):
+            return m.distilbert.transformer.layer[layer_idx]
+        # BERT classification model: bert.encoder.layer
+        if hasattr(m, "bert") and hasattr(m.bert, "encoder"):
+            return m.bert.encoder.layer[layer_idx]
+        # RoBERTa classification model: roberta.encoder.layer
+        if hasattr(m, "roberta") and hasattr(m.roberta, "encoder"):
+            return m.roberta.encoder.layer[layer_idx]
+
+        raise ValueError("Could not find transformer/encoder layers in model")
+
     def register_hooks(self, layer_idx: int, position: Optional[int] = None):
         """Register hooks to capture activations at a specific layer."""
-        # Get the transformer layer
-        if hasattr(self.model, 'transformer'):
-            layer = self.model.transformer.layer[layer_idx]
-        elif hasattr(self.model, 'encoder'):
-            layer = self.model.encoder.layer[layer_idx]
-        else:
-            raise ValueError("Could not find transformer layers in model")
+        layer = self._get_encoder_layer(layer_idx)
         
         # Register forward hook
         handle = layer.register_forward_hook(
@@ -128,13 +146,7 @@ class ActivationPatcher:
         self.hook_handles.clear()
         
         # Step 2: Patch activations into target
-        # Get the transformer layer
-        if hasattr(self.model, 'transformer'):
-            layer = self.model.transformer.layer[layer_idx]
-        elif hasattr(self.model, 'encoder'):
-            layer = self.model.encoder.layer[layer_idx]
-        else:
-            raise ValueError("Could not find transformer layers in model")
+        layer = self._get_encoder_layer(layer_idx)
         
         # Create patch hook
         def patch_hook(module, input, output):
@@ -217,12 +229,7 @@ class TargetedAblation:
             dimensions = torch.tensor(dimensions, dtype=torch.long)
         
         # Get the transformer layer
-        if hasattr(self.model, 'transformer'):
-            layer = self.model.transformer.layer[layer_idx]
-        elif hasattr(self.model, 'encoder'):
-            layer = self.model.encoder.layer[layer_idx]
-        else:
-            raise ValueError("Could not find transformer layers in model")
+        layer = self._get_encoder_layer(layer_idx)
         
         def ablation_hook(module, input, output):
             hidden_states = output[0] if isinstance(output, tuple) else output
@@ -272,12 +279,7 @@ class TargetedAblation:
             Ablated hidden states
         """
         # Get the transformer layer
-        if hasattr(self.model, 'transformer'):
-            layer = self.model.transformer.layer[layer_idx]
-        elif hasattr(self.model, 'encoder'):
-            layer = self.model.encoder.layer[layer_idx]
-        else:
-            raise ValueError("Could not find transformer layers in model")
+        layer = self._get_encoder_layer(layer_idx)
         
         def projection_hook(module, input, output):
             hidden_states = output[0] if isinstance(output, tuple) else output

@@ -1,8 +1,13 @@
 import os
+import sys
+from pathlib import Path
 import torch
 import lightning as L
 from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping, LearningRateMonitor
 from lightning.pytorch.loggers import TensorBoardLogger
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.utils.parser import parse_args
 from src.models import BaseModule

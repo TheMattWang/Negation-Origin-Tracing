@@ -1,0 +1,7 @@
+lr: 2.0e-05
+mode: finetune
+model_name: distilbert-base-uncased
+num_labels: 2
+pooling_strategy: cls
+probe_layer: null
+probe_lr: 0.001

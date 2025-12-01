@@ -3,11 +3,17 @@ Script to run causal intervention experiments.
 """
 
 import os
+import sys
+from pathlib import Path
 import argparse
 import torch
 import pandas as pd
+from typing import Dict
 from torch.utils.data import DataLoader
-from transformers import AutoModel, AutoTokenizer
+from transformers import AutoModel, AutoModelForSequenceClassification, AutoTokenizer
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.models import BaseModule
 from src.datasets import NegationPairDataset
@@ -67,8 +73,12 @@ def main():
     parser.add_argument(
         "--model_ckpt",
         type=str,
-        required=True,
-        help="Path to trained model checkpoint (for probe mode) or base model path",
+        default=None,
+        help=(
+            "Path to trained Lightning checkpoint (for probe mode or fine-tuned model). "
+            "If omitted in finetune mode, a pretrained Hugging Face model specified by "
+            "--model_name will be used instead."
+        ),
     )
     parser.add_argument(
         "--model_name",
@@ -153,22 +163,41 @@ def main():
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
     
-    # Load model
-    print(f"Loading model from {args.model_ckpt}...")
-    model_module = BaseModule.load_from_checkpoint(args.model_ckpt)
-    base_model = model_module.backbone
-    
-    if args.mode == "probe":
-        # Get probe from model
-        if hasattr(model_module, 'probes'):
-            if args.probe_layer is not None:
-                probe = model_module.probes.get(f"layer_{args.probe_layer}", None)
+    # Load model / probes
+    if args.model_ckpt is not None:
+        # Use local Lightning checkpoint (probe or finetuned model)
+        print(f"Loading model from checkpoint {args.model_ckpt}...")
+        model_module = BaseModule.load_from_checkpoint(args.model_ckpt)
+        base_model = model_module.backbone
+        
+        if args.mode == "probe":
+            # Get probe from model
+            if hasattr(model_module, "probes"):
+                if args.probe_layer is not None:
+                    probe = model_module.probes.get(f"layer_{args.probe_layer}", None)
+                else:
+                    # Use first available probe
+                    probe = next(iter(model_module.probes.values())) if model_module.probes else None
             else:
-                # Use first available probe
-                probe = next(iter(model_module.probes.values())) if model_module.probes else None
+                probe = None
         else:
             probe = None
     else:
+        # No checkpoint: fall back to a pretrained HF model.
+        # This is only meaningful in finetune mode (full classifier head).
+        if args.mode != "finetune":
+            raise ValueError(
+                "No --model_ckpt provided. Using a pretrained HF model is only "
+                "supported in finetune mode (--mode finetune)."
+            )
+        
+        print(
+            f"No checkpoint provided; loading pretrained Hugging Face model "
+            f"{args.model_name} for finetune-style interventions."
+        )
+        base_model = AutoModelForSequenceClassification.from_pretrained(
+            args.model_name
+        )
         probe = None
     
     # Load dataset

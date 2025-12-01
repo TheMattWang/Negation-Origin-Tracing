@@ -1,6 +1,11 @@
 import argparse
+import sys
+from pathlib import Path
 import torch
 from transformers import AutoTokenizer
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.models import BaseModule
 
