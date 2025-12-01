@@ -63,6 +63,22 @@ fi
 PYTHON_CMD="${PYTHON_CMD:-python}"
 echo -e "${YELLOW}Using Python: $PYTHON_CMD${NC}"
 
+# Detect GPU availability
+echo -e "\n${YELLOW}Checking GPU availability...${NC}"
+GPU_CHECK=$($PYTHON_CMD -c "import torch; print('cuda' if torch.cuda.is_available() else 'cpu')" 2>/dev/null || echo "cpu")
+if [ "$GPU_CHECK" = "cuda" ]; then
+    GPU_NAME=$($PYTHON_CMD -c "import torch; print(torch.cuda.get_device_name(0))" 2>/dev/null || echo "Unknown")
+    GPU_MEM=$($PYTHON_CMD -c "import torch; print(f'{torch.cuda.get_device_properties(0).total_memory / 1e9:.2f}')" 2>/dev/null || echo "Unknown")
+    echo -e "${GREEN}✓ GPU detected: $GPU_NAME (${GPU_MEM} GB)${NC}"
+    DEVICE="cuda"
+    DEVICES=1
+else
+    echo -e "${YELLOW}⚠ No GPU detected - will use CPU (much slower)${NC}"
+    DEVICE="cpu"
+    DEVICES=1
+fi
+echo -e "${YELLOW}Using device: $DEVICE${NC}\n"
+
 # Create output directory
 mkdir -p "$OUTPUT_DIR"
 mkdir -p "$OUTPUT_DIR/base_probes"
@@ -86,7 +102,8 @@ $PYTHON_CMD src/scripts/search_layers.py \
     --layers all \
     --pooling_strategies all \
     --output_dir "$OUTPUT_DIR/base_probes" \
-    --seed 42
+    --seed 42 \
+    --devices "$DEVICES"
 
 # Check if probe results exist
 PROBE_RESULTS="$OUTPUT_DIR/base_probes/results_summary.json"
@@ -172,7 +189,7 @@ if [ -z "$SKIP_BASE_INTERVENTIONS" ]; then
             --layers "$BEST_LAYER" \
             --batch_size "$BATCH_SIZE" \
             --output_dir "$OUTPUT_DIR/base_interventions" \
-            --device cpu
+            --device "$DEVICE"
 
         echo -e "\n${GREEN}✓ Base model interventions complete!${NC}"
     fi
