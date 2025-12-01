@@ -28,40 +28,83 @@ echo "Finetuned model: $FINETUNED_MODEL"
 echo "Output directory: $OUTPUT_DIR"
 echo ""
 
-# Activate conda environment
-CONDA_ENV_PATH="/Users/mattwang/miniconda3/envs/not"
-if [ -d "$CONDA_ENV_PATH" ]; then
-    echo -e "${YELLOW}Using conda environment at: $CONDA_ENV_PATH${NC}"
-    export PATH="$CONDA_ENV_PATH/bin:$PATH"
-    # Set Python to use the environment's Python
-    PYTHON_CMD="$CONDA_ENV_PATH/bin/python"
-    if [ ! -f "$PYTHON_CMD" ]; then
-        echo -e "${YELLOW}Warning: Python not found at $PYTHON_CMD, using system python${NC}"
-        PYTHON_CMD="python"
-    fi
-elif command -v conda &> /dev/null; then
-    echo -e "${YELLOW}Activating conda environment 'not'...${NC}"
-    # Try to source conda.sh first
+# Setup conda environment
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_NAME="not"
+
+if command -v conda &> /dev/null; then
+    # Initialize conda
     if [ -f "$(conda info --base)/etc/profile.d/conda.sh" ]; then
         source "$(conda info --base)/etc/profile.d/conda.sh"
     fi
-    # Initialize conda for bash shell
     eval "$(conda shell.bash hook)" 2>/dev/null || true
+    
+    # Check if environment exists
+    if conda env list | grep -q "^${ENV_NAME} "; then
+        echo -e "${GREEN}✓ Conda environment '${ENV_NAME}' found${NC}"
+    else
+        echo -e "${YELLOW}Environment '${ENV_NAME}' not found. Creating it...${NC}"
+        
+        # Try to create from environment.yml if it exists
+        if [ -f "$SCRIPT_DIR/environment.yml" ]; then
+            echo -e "${YELLOW}Creating environment from environment.yml...${NC}"
+            conda env create -f "$SCRIPT_DIR/environment.yml" || {
+                echo -e "${YELLOW}Failed to create from environment.yml, trying with requirements.txt...${NC}"
+                # Fallback: create basic environment and install from requirements.txt
+                conda create -n "$ENV_NAME" python=3.10 -y
+                conda activate "$ENV_NAME"
+                if [ -f "$SCRIPT_DIR/requirements.txt" ]; then
+                    pip install -r "$SCRIPT_DIR/requirements.txt"
+                fi
+            }
+        elif [ -f "$SCRIPT_DIR/requirements.txt" ]; then
+            echo -e "${YELLOW}Creating environment from requirements.txt...${NC}"
+            conda create -n "$ENV_NAME" python=3.10 -y
+            conda activate "$ENV_NAME"
+            pip install -r "$SCRIPT_DIR/requirements.txt"
+        else
+            echo -e "${YELLOW}No environment.yml or requirements.txt found. Creating basic environment...${NC}"
+            conda create -n "$ENV_NAME" python=3.10 -y
+            conda activate "$ENV_NAME"
+            pip install torch lightning transformers datasets pandas pyarrow matplotlib seaborn scikit-learn tqdm tensorboardX
+        fi
+        
+        echo -e "${GREEN}✓ Environment '${ENV_NAME}' created${NC}"
+    fi
+    
     # Activate the environment
-    conda activate not 2>/dev/null || {
-        echo -e "${YELLOW}Warning: Could not activate 'not' via conda command${NC}"
-        echo -e "${YELLOW}Please activate manually before running: conda activate not${NC}"
+    echo -e "${YELLOW}Activating conda environment '${ENV_NAME}'...${NC}"
+    conda activate "$ENV_NAME" || {
+        echo -e "${YELLOW}Warning: Could not activate '${ENV_NAME}'${NC}"
         PYTHON_CMD="python"
-    } || PYTHON_CMD="python"
+    }
+    
+    # Get Python path from activated environment
+    if [ -n "$CONDA_PREFIX" ]; then
+        PYTHON_CMD="$CONDA_PREFIX/bin/python"
+        if [ ! -f "$PYTHON_CMD" ]; then
+            PYTHON_CMD="python"
+        fi
+    else
+        # Try to find environment path
+        CONDA_ENV_PATH=$(conda env list | grep "^${ENV_NAME} " | awk '{print $NF}')
+        if [ -n "$CONDA_ENV_PATH" ] && [ -d "$CONDA_ENV_PATH" ]; then
+            PYTHON_CMD="$CONDA_ENV_PATH/bin/python"
+            export PATH="$CONDA_ENV_PATH/bin:$PATH"
+        else
+            PYTHON_CMD="python"
+        fi
+    fi
 else
-    echo -e "${YELLOW}Warning: conda not found, using system python${NC}"
-    echo -e "${YELLOW}If you see import errors, please activate the 'not' environment manually${NC}"
+    echo -e "${YELLOW}Warning: conda not found${NC}"
+    echo -e "${YELLOW}Please install conda or activate the '${ENV_NAME}' environment manually${NC}"
     PYTHON_CMD="python"
 fi
 
 # Default to python if PYTHON_CMD not set
 PYTHON_CMD="${PYTHON_CMD:-python}"
-echo -e "${YELLOW}Using Python: $PYTHON_CMD${NC}"
+echo -e "${GREEN}Using Python: $PYTHON_CMD${NC}"
+echo -e "${GREEN}Python path: $(which $PYTHON_CMD)${NC}"
 
 # Detect GPU availability
 echo -e "\n${YELLOW}Checking GPU availability...${NC}"
