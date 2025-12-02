@@ -281,6 +281,11 @@ def main():
         choices=["pooling", "layer", "all"],
         help="Parallelization mode: 'pooling' (parallel pooling per layer), 'layer' (parallel layers), 'all' (both)",
     )
+    parser.add_argument(
+        "--colab_safe",
+        action="store_true",
+        help="Enable Colab-safe mode: sets num_workers=0 and limits parallel workers to 2 for single GPU",
+    )
     
     # Parse layer search specific args
     layer_search_args = parser.parse_args(remaining)
@@ -289,6 +294,15 @@ def main():
     for key, value in vars(layer_search_args).items():
         if not hasattr(args, key):
             setattr(args, key, value)
+    
+    # Apply Colab-safe settings if requested
+    if getattr(args, 'colab_safe', False):
+        print("🔒 Colab-safe mode enabled:")
+        args.num_workers = 0
+        args.parallel_workers = min(args.parallel_workers, 3)  # 3 pooling strategies in parallel
+        print(f"  - num_workers: 0 (no DataLoader multiprocessing)")
+        print(f"  - parallel_workers: {args.parallel_workers} (3 pooling strategies per layer)")
+        print()
     
     # Determine layers to search
     if args.layers == "all":

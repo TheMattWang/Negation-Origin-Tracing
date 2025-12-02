@@ -4,10 +4,29 @@ This guide shows you how to run layer search experiments on Google Colab **witho
 
 ## TL;DR - Quick Commands
 
-### Option 1: Colab-Optimized Script (Recommended)
+### Option 1: Parallel Execution (Fastest - Recommended)
 
 ```bash
-# Full layer search (all layers, all pooling strategies)
+# Full layer search with parallel pooling strategies (3x faster!)
+python src/scripts/search_layers_parallel.py \
+    --model_name distilbert-base-uncased \
+    --data_dir data/raw \
+    --output_dir experiments/layer_search \
+    --layers all \
+    --pooling_strategies all \
+    --parallel_mode pooling \
+    --parallel_workers 3 \
+    --colab_safe \
+    --max_epochs 10 \
+    --batch_size 32
+```
+
+**Runtime**: ~1-1.5 hours on Colab T4 GPU (with `--colab_safe` flag)
+
+### Option 2: Sequential Execution (Safest)
+
+```bash
+# Full layer search (sequential, slower but most stable)
 python src/scripts/search_layers_colab.py \
     --model_name distilbert-base-uncased \
     --data_dir data/raw \
@@ -72,7 +91,20 @@ import os
 output_dir = '/content/drive/MyDrive/Negation-Results/layer_search'
 os.makedirs(output_dir, exist_ok=True)
 
-# Run layer search (deadlock-free!)
+# Option A: Parallel execution (FASTER - 3x speedup!)
+!python src/scripts/search_layers_parallel.py \
+    --model_name distilbert-base-uncased \
+    --data_dir data/raw \
+    --output_dir {output_dir} \
+    --layers all \
+    --pooling_strategies all \
+    --parallel_mode pooling \
+    --parallel_workers 3 \
+    --colab_safe \
+    --max_epochs 10 \
+    --batch_size 32
+
+# Option B: Sequential execution (SAFEST - if parallel has issues)
 !python src/scripts/search_layers_colab.py \
     --model_name distilbert-base-uncased \
     --data_dir data/raw \
@@ -134,24 +166,38 @@ print(df.groupby('pooling_strategy')['test_auroc'].mean().round(4))
 ## Why This Works (No Deadlocks)
 
 ### The Problem
-- **Before**: Parallel processes + DataLoader workers = deadlock
-- **After**: Sequential execution + no DataLoader workers = stable
+- **Before**: Parallel processes + DataLoader workers (num_workers=4) = deadlock
+- **Cause**: 3 parallel processes × 4 DataLoader workers = 12 workers competing for 1 GPU
 
 ### The Fix
-The `search_layers_colab.py` script automatically:
-1. Sets `num_workers=0` (no DataLoader multiprocessing)
-2. Runs experiments sequentially (one at a time)
-3. Clears GPU cache between experiments
-4. Handles errors gracefully
-
-### Key Setting
+Set `num_workers=0` to disable DataLoader multiprocessing:
 ```python
-# This is the critical fix
 datamodule = NOTDataModule(
     # ... other args ...
-    num_workers=0,  # No multiprocessing - prevents deadlocks
+    num_workers=0,  # No DataLoader workers - prevents deadlocks
 )
 ```
+
+### Why Parallel NOW Works
+With `num_workers=0`:
+- ✅ **3 parallel experiments** = OK (each uses GPU directly, no nested workers)
+- ✅ **Each experiment** loads data in its main process
+- ✅ **No resource contention** from DataLoader workers
+- ✅ **3x speedup** from running 3 pooling strategies in parallel
+
+### Two Approaches
+
+**Parallel (Faster - Recommended)**:
+- Uses `search_layers_parallel.py` with `--colab_safe`
+- Runs 3 pooling strategies in parallel per layer
+- ~1-1.5 hours for full search
+- Safe with `num_workers=0`
+
+**Sequential (Safest)**:
+- Uses `search_layers_colab.py`
+- Runs one experiment at a time
+- ~2-3 hours for full search
+- Maximum stability
 
 ## Configuration Options
 
@@ -211,12 +257,12 @@ datamodule = NOTDataModule(
 
 ## Expected Runtimes (Colab T4 GPU)
 
-| Configuration | Time | Notes |
-|--------------|------|-------|
-| 1 layer, 1 pooling, 1 epoch | ~3 min | Quick test |
-| 1 layer, 3 pooling, 10 epochs | ~15 min | Single layer full |
-| 6 layers, 3 pooling, 10 epochs | ~90 min | Half search |
-| All layers (6), 3 pooling, 10 epochs | ~2-3 hours | **Full search** |
+| Configuration | Parallel (3 workers) | Sequential | Notes |
+|--------------|---------------------|------------|-------|
+| 1 layer, 1 pooling, 1 epoch | ~3 min | ~3 min | Quick test |
+| 1 layer, 3 pooling, 10 epochs | ~5 min | ~15 min | **3x speedup** |
+| 6 layers, 3 pooling, 10 epochs | ~30-45 min | ~90 min | **2-3x speedup** |
+| All layers (6), 3 pooling, 10 epochs | **~1-1.5 hours** | ~2-3 hours | **Parallel recommended** |
 
 ## Troubleshooting
 

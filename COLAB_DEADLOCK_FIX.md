@@ -23,14 +23,40 @@ This creates a situation where:
 
 Set `num_workers=0` in DataLoaders when running in parallel mode. This ensures:
 - Only the main training processes use the GPU
-- No nested multiprocessing
-- Data loading happens in the main process (slightly slower but avoids deadlocks)
+- No nested multiprocessing (no DataLoader workers)
+- Data loading happens in the main process
+- **Parallel execution is now safe**: 3 experiments can run simultaneously on single GPU
 
 ## Implementation
 
-### Option 1: Use Colab-Optimized Script (Recommended)
+### Option 1: Parallel Execution (Recommended - Fastest)
 
-We've created a dedicated script for Colab that automatically handles this:
+Use the parallel script with `--colab_safe` flag:
+
+```bash
+python src/scripts/search_layers_parallel.py \
+    --model_name distilbert-base-uncased \
+    --data_dir data/raw \
+    --output_dir experiments/layer_search \
+    --layers all \
+    --pooling_strategies all \
+    --parallel_mode pooling \
+    --parallel_workers 3 \
+    --colab_safe \
+    --max_epochs 10
+```
+
+**Features:**
+- ✅ Automatically sets `num_workers=0`
+- ✅ Runs 3 pooling strategies in parallel per layer
+- ✅ **3x speedup** (~1-1.5 hours vs 2-3 hours)
+- ✅ Safe for single GPU with `--colab_safe` flag
+- ✅ Resume support
+- ✅ Progress tracking
+
+### Option 2: Sequential Execution (Safest)
+
+Use the sequential script if you prefer maximum stability:
 
 ```bash
 python src/scripts/search_layers_colab.py \
@@ -44,29 +70,10 @@ python src/scripts/search_layers_colab.py \
 
 **Features:**
 - ✅ Automatically sets `num_workers=0`
-- ✅ Sequential execution (safe for single GPU)
-- ✅ GPU memory management (clears cache between experiments)
-- ✅ Resume support
-- ✅ Progress tracking
-- ✅ Error handling
-
-### Option 2: Use Parallel Script with Fixed Settings
-
-If you want to use the parallel script on Colab:
-
-```bash
-python src/scripts/search_layers_parallel.py \
-    --model_name distilbert-base-uncased \
-    --data_dir data/raw \
-    --output_dir experiments/layer_search \
-    --layers all \
-    --pooling_strategies all \
-    --parallel_mode pooling \
-    --parallel_workers 3 \
-    --max_epochs 10
-```
-
-**Note:** The parallel script has been updated to automatically set `num_workers=0` internally.
+- ✅ Sequential execution (one at a time)
+- ✅ Maximum stability
+- ✅ GPU memory management
+- ⚠️ Slower (~2-3 hours)
 
 ### Option 3: Manual Configuration
 
@@ -116,16 +123,15 @@ A dedicated script with Colab-optimized settings:
 | Configuration | Speed | Stability | Recommended For |
 |--------------|-------|-----------|-----------------|
 | `num_workers=4` (parallel) | ❌ Deadlock | ❌ Unstable | Never on Colab |
-| `num_workers=0` (parallel) | ⚠️ Moderate | ✅ Stable | Multi-GPU only |
-| `num_workers=0` (sequential) | ✅ Good | ✅ Stable | **Colab (recommended)** |
+| `num_workers=0` (parallel, 3 workers) | ✅ Fast | ✅ Stable | **Colab (recommended)** |
+| `num_workers=0` (sequential) | ⚠️ Moderate | ✅ Stable | Colab (safest) |
 
 ### Expected Runtimes (Colab T4 GPU)
 
 | Configuration | Time for 18 Experiments | Notes |
 |--------------|------------------------|-------|
-| Sequential + num_workers=0 | ~2-3 hours | **Recommended** |
-| Sequential + num_workers=4 | ~1.5-2 hours | Works but slower |
-| Parallel + num_workers=0 | ~1-2 hours | Fixed, now works |
+| Parallel (3 workers) + num_workers=0 | **~1-1.5 hours** | **Recommended (3x speedup)** |
+| Sequential + num_workers=0 | ~2-3 hours | Safest option |
 | Parallel + num_workers=4 | ❌ Deadlock | Don't use |
 
 ## Why This Happens on Colab

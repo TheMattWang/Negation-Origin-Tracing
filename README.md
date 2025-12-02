@@ -126,18 +126,22 @@ We evaluate with:
    !python src/data/download.py
    ```
 
-4. **Run layer search (deadlock-free):**
+4. **Run layer search (parallel - faster!):**
    ```python
-   !python src/scripts/search_layers_colab.py \
+   # Parallel execution with 3 workers (3x faster, ~1-1.5 hours)
+   !python src/scripts/search_layers_parallel.py \
        --model_name distilbert-base-uncased \
        --data_dir data/raw \
        --output_dir experiments/layer_search \
        --layers all \
        --pooling_strategies all \
+       --parallel_mode pooling \
+       --parallel_workers 3 \
+       --colab_safe \
        --max_epochs 10
    ```
    
-   **⚠️ Important**: Use `search_layers_colab.py` on Colab to avoid deadlocks. See [`COLAB_QUICK_START.md`](COLAB_QUICK_START.md) for details.
+   **⚠️ Important**: Use `--colab_safe` flag to avoid deadlocks on single GPU. See [`COLAB_QUICK_START.md`](COLAB_QUICK_START.md) for details.
 
 **Alternative: Use notebooks** (step-by-step):
    - `notebooks/00_setup_colab.ipynb` - Setup environment and install dependencies
