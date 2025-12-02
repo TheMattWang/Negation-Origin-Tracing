@@ -3,9 +3,11 @@
 Merge results from parallel sweep scripts (cls, mean, token).
 Run this after all 3 sweeps complete.
 
-Usage:
+Usage (local):
     python merge_sweep_results.py
-    python merge_sweep_results.py --output_dir experiments/merged_results
+
+Usage (Google Drive):
+    python merge_sweep_results.py --drive_path /content/drive/MyDrive/NOT_results
 """
 
 import json
@@ -14,20 +16,28 @@ import argparse
 from pathlib import Path
 
 
-def merge_results(output_dir="experiments/merged_results"):
+def merge_results(drive_path=None, output_dir=None):
     """Merge results from all 3 pooling sweep directories."""
     
-    # Default sweep directories
+    # Determine base path
+    if drive_path:
+        base_path = drive_path
+    else:
+        base_path = "experiments"
+    
+    # Sweep directories
     sweep_dirs = {
-        "cls": "experiments/sweep_cls",
-        "mean": "experiments/sweep_mean",
-        "token": "experiments/sweep_token",
+        "cls": os.path.join(base_path, "sweep_cls"),
+        "mean": os.path.join(base_path, "sweep_mean"),
+        "token": os.path.join(base_path, "sweep_token"),
     }
     
     all_results = []
     
     print("Merging sweep results...")
     print("=" * 50)
+    print(f"Looking in: {base_path}")
+    print("")
     
     for pooling, sweep_dir in sweep_dirs.items():
         results_file = os.path.join(sweep_dir, f"results_{pooling}.json")
@@ -35,16 +45,18 @@ def merge_results(output_dir="experiments/merged_results"):
         if os.path.exists(results_file):
             with open(results_file, 'r') as f:
                 results = json.load(f)
-            print(f"✓ {pooling}: {len(results)} results from {results_file}")
+            print(f"✓ {pooling}: {len(results)} results")
             all_results.extend(results)
         else:
             print(f"✗ {pooling}: Not found at {results_file}")
     
     if not all_results:
-        print("\nNo results found!")
-        return
+        print("\nNo results found! Make sure all 3 sweeps have completed.")
+        return None
     
     # Create output directory
+    if output_dir is None:
+        output_dir = os.path.join(base_path, "merged_results")
     os.makedirs(output_dir, exist_ok=True)
     
     # Save merged results
@@ -64,26 +76,28 @@ def merge_results(output_dir="experiments/merged_results"):
     if valid:
         # Best overall
         best = max(valid, key=lambda x: x.get('test_auroc', 0))
-        print(f"\nBest overall:")
-        print(f"  Layer {best['layer']}, {best['pooling']}")
-        print(f"  AUROC: {best.get('test_auroc', 0):.4f}")
-        print(f"  Accuracy: {best.get('test_acc', 0):.4f}")
+        print(f"\n🏆 Best overall:")
+        print(f"   Layer {best['layer']}, {best['pooling']} pooling")
+        print(f"   AUROC: {best.get('test_auroc', 0):.4f}")
+        print(f"   Accuracy: {best.get('test_acc', 0):.4f}")
+        if best.get('checkpoint'):
+            print(f"   Checkpoint: {best['checkpoint']}")
         
         # Best per pooling
-        print("\nBest per pooling strategy:")
+        print("\n📊 Best per pooling strategy:")
         for pooling in ['cls', 'mean', 'token']:
             pooling_results = [r for r in valid if r.get('pooling') == pooling]
             if pooling_results:
                 best_p = max(pooling_results, key=lambda x: x.get('test_auroc', 0))
-                print(f"  {pooling}: Layer {best_p['layer']} -> AUROC {best_p.get('test_auroc', 0):.4f}")
+                print(f"   {pooling:6s}: Layer {best_p['layer']} -> AUROC {best_p.get('test_auroc', 0):.4f}, Acc {best_p.get('test_acc', 0):.4f}")
         
         # Best per layer
-        print("\nBest per layer:")
+        print("\n📈 Best per layer:")
         for layer in range(6):
             layer_results = [r for r in valid if r.get('layer') == layer]
             if layer_results:
                 best_l = max(layer_results, key=lambda x: x.get('test_auroc', 0))
-                print(f"  Layer {layer}: {best_l['pooling']} -> AUROC {best_l.get('test_auroc', 0):.4f}")
+                print(f"   Layer {layer}: {best_l['pooling']:6s} -> AUROC {best_l.get('test_auroc', 0):.4f}")
     
     # Save CSV for easy analysis
     try:
@@ -95,14 +109,18 @@ def merge_results(output_dir="experiments/merged_results"):
     except ImportError:
         print("\n(pandas not available, skipping CSV export)")
     
-    print("\nDone!")
+    print("\n" + "=" * 50)
+    print("Done!")
+    
+    return all_results
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Merge parallel sweep results")
-    parser.add_argument("--output_dir", default="experiments/merged_results",
+    parser.add_argument("--drive_path", default=None,
+                        help="Google Drive path (e.g., /content/drive/MyDrive/NOT_results)")
+    parser.add_argument("--output_dir", default=None,
                         help="Output directory for merged results")
     args = parser.parse_args()
     
-    merge_results(args.output_dir)
-
+    merge_results(args.drive_path, args.output_dir)

@@ -3,6 +3,10 @@
 # Sweep: MEAN Pooling Only (Run in its own Colab/terminal)
 # =============================================================================
 # Run this in one Colab runtime while running cls/token in others
+#
+# For Google Drive persistence, set DRIVE_OUTPUT before running:
+#   export DRIVE_OUTPUT="/content/drive/MyDrive/NOT_results"
+#   ./run_sweep_mean.sh
 
 set -o pipefail
 
@@ -11,7 +15,15 @@ DATA_DIR="${DATA_DIR:-data/raw}"
 BATCH_SIZE="${BATCH_SIZE:-16}"
 MAX_EPOCHS="${MAX_EPOCHS:-10}"
 SEED="${SEED:-42}"
-OUTPUT_DIR="${OUTPUT_DIR:-experiments/sweep_mean}"
+
+# Use Google Drive if DRIVE_OUTPUT is set, otherwise local
+if [ -n "$DRIVE_OUTPUT" ]; then
+    OUTPUT_DIR="$DRIVE_OUTPUT/sweep_mean"
+    echo "Saving to Google Drive: $OUTPUT_DIR"
+else
+    OUTPUT_DIR="${OUTPUT_DIR:-experiments/sweep_mean}"
+    echo "Saving locally: $OUTPUT_DIR"
+fi
 
 echo "========================================"
 echo "Layer Sweep: MEAN Pooling"
@@ -21,6 +33,7 @@ echo "Output: $OUTPUT_DIR"
 echo ""
 
 mkdir -p "$OUTPUT_DIR/logs"
+mkdir -p "$OUTPUT_DIR/checkpoints"
 
 # Activate conda if available
 if command -v conda &> /dev/null; then
@@ -35,6 +48,8 @@ for layer in 0 1 2 3 4 5; do
     echo ""
     echo "[Layer $layer] MEAN pooling..."
     LOG="$OUTPUT_DIR/logs/layer${layer}_mean.log"
+    CKPT_DIR="$OUTPUT_DIR/checkpoints/layer${layer}_mean"
+    mkdir -p "$CKPT_DIR"
     
     CUDA_VISIBLE_DEVICES=0 \
     CUDA_LAUNCH_BLOCKING=1 \
@@ -79,10 +94,7 @@ train_dl = DataLoader(train_ds, batch_size=$BATCH_SIZE, shuffle=True, num_worker
 val_dl = DataLoader(val_ds, batch_size=$BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=False)
 test_dl = DataLoader(test_ds, batch_size=$BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=False)
 
-ckpt_dir = '$OUTPUT_DIR/checkpoints/layer${layer}_mean'
-os.makedirs(ckpt_dir, exist_ok=True)
-
-ckpt_cb = ModelCheckpoint(dirpath=ckpt_dir, filename='best-{val_acc:.3f}', monitor='val_acc', mode='max', save_top_k=1)
+ckpt_cb = ModelCheckpoint(dirpath='$CKPT_DIR', filename='best-{val_acc:.3f}', monitor='val_acc', mode='max', save_top_k=1)
 early_cb = EarlyStopping(monitor='val_loss', mode='min', patience=3)
 
 trainer = L.Trainer(
@@ -100,7 +112,13 @@ trainer.fit(model, train_dl, val_dl)
 results = trainer.test(model, test_dl, ckpt_path='best', verbose=False)
 r = results[0] if results else {}
 
-out = {'layer': $layer, 'pooling': 'mean', 'test_acc': r.get('test_acc', 0), 'test_auroc': r.get('test_auroc', 0)}
+out = {
+    'layer': $layer,
+    'pooling': 'mean',
+    'test_acc': r.get('test_acc', 0),
+    'test_auroc': r.get('test_auroc', 0),
+    'checkpoint': ckpt_cb.best_model_path,
+}
 print('RESULT:' + json.dumps(out))
 " 2>&1 | tee "$LOG"
     
@@ -137,4 +155,3 @@ if results:
     best = max(results, key=lambda x: x.get('test_auroc', 0))
     print(f\"Best: Layer {best['layer']} -> AUROC {best.get('test_auroc', 0):.4f}\")
 "
-
