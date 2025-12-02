@@ -20,6 +20,7 @@ This guide explains how to run the Negation-Origin-Tracing experiments in Google
    - `02_layer_search.ipynb` - Train probes
    - `03_visualize_results.ipynb` - Generate plots
    - `04_full_experiment.ipynb` - Complete pipeline
+   - `06_run_full_comparison_colab.ipynb` - **AUTOMATED: Full experiment with Drive sync**
 
 ## Environment Setup
 
@@ -49,11 +50,29 @@ After setup, your Colab environment should have:
 
 ## Saving Results
 
-### Option 1: Download from Colab
+### **RECOMMENDED: Automated Google Drive Sync**
+
+Use the new `06_run_full_comparison_colab.ipynb` notebook which automatically:
+1. Mounts Google Drive
+2. Runs the full experiment
+3. Saves all results to `My Drive/Negation-Origin-Tracing-Results/`
+4. Verifies results were saved
+
+**To use:**
+1. Upload `06_run_full_comparison_colab.ipynb` to Colab
+2. Run all cells (or run them one by one)
+3. Results automatically appear in your Google Drive
+4. Download from Drive to your local machine
+
+**Local sync (optional):**
+- Install [Google Drive desktop app](https://www.google.com/drive/download/)
+- Results sync automatically to your Mac
+
+### Alternative: Manual Download from Colab
 - Right-click files in Colab file browser
 - Select "Download"
 
-### Option 2: Mount Google Drive
+### Alternative: Manual Drive Mount
 ```python
 from google.colab import drive
 drive.mount('/content/drive')
@@ -62,7 +81,7 @@ drive.mount('/content/drive')
 config['output_dir'] = '/content/drive/MyDrive/experiments'
 ```
 
-### Option 3: Save to GitHub
+### Alternative: Save to GitHub
 ```python
 # After experiments, commit and push
 !git add experiments/

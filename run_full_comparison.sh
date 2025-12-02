@@ -8,7 +8,14 @@ set -e  # Exit on error
 BASE_MODEL="distilbert-base-uncased"
 FINETUNED_MODEL="distilbert-base-uncased-finetuned-sst-2-english"
 DATA_DIR="data/raw"
-OUTPUT_DIR="experiments/comparison_$(date +%Y%m%d_%H%M%S)"
+
+# Support custom output directory (e.g., for Google Drive)
+if [ -n "$DRIVE_OUTPUT" ]; then
+    OUTPUT_DIR="$DRIVE_OUTPUT/comparison_$(date +%Y%m%d_%H%M%S)"
+else
+    OUTPUT_DIR="experiments/comparison_$(date +%Y%m%d_%H%M%S)"
+fi
+
 BATCH_SIZE=16
 MAX_EPOCHS=10
 PROBE_LR=1e-3

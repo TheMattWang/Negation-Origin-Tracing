@@ -16,6 +16,8 @@ This directory contains Jupyter notebooks for running experiments in Google Cola
    - `02_layer_search.ipynb` - Train probes on all layers
    - `03_visualize_results.ipynb` - Generate visualizations
    - `04_full_experiment.ipynb` - Run complete pipeline
+   - `05_base_vs_finetuned_comparison.ipynb` - Analysis of base vs finetuned models
+   - `06_run_full_comparison_colab.ipynb` - **AUTOMATED: Full experiment with Drive sync**
 
 ## Quick Start
 
@@ -37,6 +39,7 @@ This directory contains Jupyter notebooks for running experiments in Google Cola
    - `notebooks/02_layer_search.ipynb` - Train probes on all layers
    - `notebooks/03_visualize_results.ipynb` - Generate plots
    - `notebooks/04_full_experiment.ipynb` - Complete pipeline
+   - `notebooks/06_run_full_comparison_colab.ipynb` - **AUTOMATED: Full comparison with Drive sync**
 
 ### Alternative: Upload notebooks
 1. Upload notebooks from `notebooks/` directory to Colab
@@ -70,14 +73,40 @@ This directory contains Jupyter notebooks for running experiments in Google Cola
 - Includes probe training, visualization, interventions, and interpretation
 - Generates final report
 
+### 05_base_vs_finetuned_comparison.ipynb
+- Analyzes differences between base and finetuned models
+- Compares probe performance and intervention effects
+- Generates comparison visualizations
+
+### 06_run_full_comparison_colab.ipynb ⭐ **RECOMMENDED FOR AUTOMATION**
+- **Fully automated end-to-end experiment**
+- Automatically mounts Google Drive
+- Runs complete base vs finetuned comparison
+- Saves all results to Drive automatically
+- Includes result verification and preview
+- **Best for long-running experiments (2-4 hours)**
+
 ## Tips for Colab
 
 1. **Enable GPU**: Runtime → Change runtime type → GPU
-2. **Save results**: Download results from Colab or save to Google Drive
-3. **Long experiments**: Use Colab Pro for longer runtimes
+2. **Save results**: Use `06_run_full_comparison_colab.ipynb` for automatic Drive sync
+3. **Long experiments**: Use Colab Pro for longer runtimes (12+ hours)
 4. **Data persistence**: Mount Google Drive to save data between sessions
 
-## Mounting Google Drive (Optional)
+## Automated Result Saving (Recommended)
+
+The `06_run_full_comparison_colab.ipynb` notebook handles everything automatically:
+- Mounts Google Drive
+- Runs experiments
+- Saves to `My Drive/Negation-Origin-Tracing-Results/`
+- Verifies results were saved
+
+**To access results locally:**
+1. Install [Google Drive desktop app](https://www.google.com/drive/download/)
+2. Results sync automatically to your computer
+3. Or download manually from Drive web interface
+
+## Manual Google Drive Mount (Optional)
 
 ```python
 from google.colab import drive

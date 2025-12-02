@@ -208,3 +208,11 @@ __marimo__/
 
 # Download
 */download.py
+
+# Experiment results and checkpoints (too large for GitHub)
+*.ckpt
+experiments/*/
+!experiments/.gitkeep
+# Keep experiment scripts but ignore results
+!experiments/configs/
+!experiments/runs/.gitkeep
