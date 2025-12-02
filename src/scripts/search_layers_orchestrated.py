@@ -20,23 +20,24 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 def train_single_probe(layer_idx, pooling_strategy, args, output_dir):
     """
     Launch a separate Python process to train a single probe.
+    Uses search_layers.py with specific layer/pooling to avoid train.py argument issues.
     Returns the subprocess object.
     """
     cmd = [
         sys.executable,
-        "src/scripts/train.py",
-        "--mode", "probe",
+        "src/scripts/search_layers.py",
         "--model_name", args.model_name,
         "--data_dir", args.data_dir,
         "--batch_size", str(args.batch_size),
         "--max_epochs", str(args.max_epochs),
         "--probe_lr", str(args.probe_lr),
-        "--probe_layer", str(layer_idx),
-        "--pooling_strategy", pooling_strategy,
-        "--experiment_name", f"layer_{layer_idx}_pooling_{pooling_strategy}",
+        "--layers", str(layer_idx),  # Single layer
+        "--pooling_strategies", pooling_strategy,  # Single pooling
         "--output_dir", output_dir,
         "--seed", str(args.seed),
         "--devices", str(args.devices),
+        "--mode", "probe",
+        "--num_labels", str(args.num_labels),
         "--precision", str(args.precision),
     ]
     
