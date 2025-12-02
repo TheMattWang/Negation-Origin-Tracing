@@ -120,9 +120,15 @@ class BaseModule(L.LightningModule):
             logits = outputs.logits
             
             result = {"logits": logits}
-            if "labels" in batch:
-                loss = self.criterion(logits, batch["labels"])
-                result["loss"] = loss
+            # Only compute loss if labels are provided and valid
+            if "labels" in batch and batch["labels"] is not None:
+                # Check if labels are valid (not -1, which indicates no ground truth)
+                valid_labels = batch["labels"] >= 0
+                if valid_labels.any():
+                    # Only compute loss on valid labels
+                    loss = self.criterion(logits, batch["labels"])
+                    result["loss"] = loss
+                # If all labels are -1, skip loss computation
             
             return result
         
@@ -161,20 +167,24 @@ class BaseModule(L.LightningModule):
                 # For multiple layers, use the last layer as main output
                 results["logits"] = results[f"logits_layer_{self.probe_layers[-1]}"]
             
-            # Compute loss if labels provided
-            if "labels" in batch:
-                # Compute loss for each layer
-                losses = {}
-                for layer_idx in self.probe_layers:
-                    logits = results[f"logits_layer_{layer_idx}"]
-                    loss = self.criterion(logits, batch["labels"])
-                    losses[f"loss_layer_{layer_idx}"] = loss
-                
-                # Use average loss across layers, or single layer loss
-                if len(losses) == 1:
-                    results["loss"] = list(losses.values())[0]
-                else:
-                    results["loss"] = torch.stack(list(losses.values())).mean()
+            # Compute loss if labels provided and valid
+            if "labels" in batch and batch["labels"] is not None:
+                # Check if labels are valid (not -1, which indicates no ground truth)
+                valid_labels = batch["labels"] >= 0
+                if valid_labels.any():
+                    # Compute loss for each layer
+                    losses = {}
+                    for layer_idx in self.probe_layers:
+                        logits = results[f"logits_layer_{layer_idx}"]
+                        loss = self.criterion(logits, batch["labels"])
+                        losses[f"loss_layer_{layer_idx}"] = loss
+                    
+                    # Use average loss across layers, or single layer loss
+                    if len(losses) == 1:
+                        results["loss"] = list(losses.values())[0]
+                    else:
+                        results["loss"] = torch.stack(list(losses.values())).mean()
+                # If all labels are -1, skip loss computation
             
             return results
     
@@ -299,10 +309,20 @@ class BaseModule(L.LightningModule):
     def test_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict[str, torch.Tensor]:
         """Test step."""
         outputs = self.forward(batch)
-        loss = outputs["loss"]
-        
         logits = outputs["logits"]
         preds = torch.argmax(logits, dim=1)
+        
+        # Handle test sets without ground truth labels (e.g., SST-2 test set with -1 labels)
+        if "labels" not in batch or batch["labels"] is None:
+            # No ground truth - can't compute loss or accuracy
+            self.test_step_outputs.append({
+                "preds": preds.detach(),
+                "logits": logits.detach()
+            })
+            return {"preds": preds, "logits": logits}
+        
+        # Has labels - compute metrics
+        loss = outputs.get("loss", torch.tensor(0.0))
         labels = batch["labels"]
         acc = (preds == labels).float().mean()
         

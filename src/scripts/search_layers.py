@@ -121,29 +121,69 @@ def train_probe_for_layer(
     # Train
     trainer.fit(model=model, datamodule=datamodule)
     
-    # Test
+    # Test - check if test set has labels
     datamodule.setup("test")
-    test_results = trainer.test(
-        model=model,
-        datamodule=datamodule,
-        ckpt_path="best",
-        verbose=False,
-    )
+    test_dataset = datamodule.test_dataset
     
-    # Extract metrics
-    test_result = test_results[0] if test_results else {}
+    # Check if test dataset has valid labels (not -1)
+    has_test_labels = getattr(test_dataset, 'has_labels', True)
     
-    result = {
-        "layer_idx": layer_idx,
-        "pooling_strategy": pooling_strategy,
-        "checkpoint_path": checkpoint_callback.best_model_path,
-        "test_accuracy": test_result.get("test_acc", 0.0),
-        "test_auroc": test_result.get("test_auroc", 0.0),
-        "test_loss": test_result.get("test_loss", float('inf')),
-        "val_accuracy": test_result.get("val_acc", 0.0),  # May not be in test_results
-        "val_auroc": test_result.get("val_auroc", 0.0),
-        "experiment_dir": experiment_dir,
-    }
+    if not has_test_labels:
+        # Test set has no ground truth (e.g., SST-2 test set with -1 labels)
+        # Still run test set for inference, but use validation set for metrics
+        print(f"  ⚠ Test set has no ground truth labels (-1), running inference anyway")
+        print(f"  → Using validation set metrics as test metrics")
+        
+        # Run test set (will generate predictions but no metrics)
+        trainer.test(
+            model=model,
+            datamodule=datamodule,
+            ckpt_path="best",
+            verbose=False,
+        )
+        
+        # Get validation metrics to use as test metrics
+        val_results = trainer.validate(
+            model=model,
+            datamodule=datamodule,
+            ckpt_path="best",
+            verbose=False,
+        )
+        val_result = val_results[0] if val_results else {}
+        
+        result = {
+            "layer_idx": layer_idx,
+            "pooling_strategy": pooling_strategy,
+            "checkpoint_path": checkpoint_callback.best_model_path,
+            "test_accuracy": val_result.get("val_acc", 0.0),  # Use val metrics as test
+            "test_auroc": val_result.get("val_auroc", 0.0),
+            "test_loss": val_result.get("val_loss", float('inf')),
+            "val_accuracy": val_result.get("val_acc", 0.0),
+            "val_auroc": val_result.get("val_auroc", 0.0),
+            "experiment_dir": experiment_dir,
+            "note": "test_set_has_no_labels_using_val_metrics",
+        }
+    else:
+        # Test set has labels - use it normally
+        test_results = trainer.test(
+            model=model,
+            datamodule=datamodule,
+            ckpt_path="best",
+            verbose=False,
+        )
+        # Extract metrics
+        test_result = test_results[0] if test_results else {}
+        result = {
+            "layer_idx": layer_idx,
+            "pooling_strategy": pooling_strategy,
+            "checkpoint_path": checkpoint_callback.best_model_path,
+            "test_accuracy": test_result.get("test_acc", 0.0),
+            "test_auroc": test_result.get("test_auroc", 0.0),
+            "test_loss": test_result.get("test_loss", float('inf')),
+            "val_accuracy": test_result.get("val_acc", 0.0),  # May not be in test_results
+            "val_auroc": test_result.get("val_auroc", 0.0),
+            "experiment_dir": experiment_dir,
+        }
     
     print(f"✓ Layer {layer_idx}, {pooling_strategy}: "
           f"Test Acc={result['test_accuracy']:.4f}, "
