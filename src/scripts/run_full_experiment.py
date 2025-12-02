@@ -113,18 +113,13 @@ def run_layer_search(args):
         if remaining > 5:
             print(f"  ... and {remaining - 5} more")
     
-    # Convert experiments to run into layer and pooling args
-    layers_str = ",".join(str(layer) for layer, _ in experiments_to_run)
-    pooling_str = ",".join(pooling for _, pooling in experiments_to_run)
-    
-    # If we need to run specific experiments, we'll need to run them individually
-    # since search_layers.py doesn't support skipping specific combinations
-    # For now, we'll use a different approach: run search_layers.py but it will
-    # check for existing results
+    # Determine which script to use (parallel or sequential)
+    use_parallel = getattr(args, 'parallel', False)
+    script_name = "src/scripts/search_layers_parallel.py" if use_parallel else "src/scripts/search_layers.py"
     
     cmd = [
         sys.executable,
-        "src/scripts/search_layers.py",
+        script_name,
         "--data_dir", args.data_dir,
         "--model_name", args.model_name,
         "--batch_size", str(args.batch_size),
@@ -138,6 +133,13 @@ def run_layer_search(args):
     
     if hasattr(args, 'devices'):
         cmd.extend(["--devices", str(args.devices)])
+    
+    # Add parallel-specific arguments if using parallel script
+    if use_parallel:
+        parallel_workers = getattr(args, 'parallel_workers', 3)
+        parallel_mode = getattr(args, 'parallel_mode', 'pooling')
+        cmd.extend(["--parallel_workers", str(parallel_workers)])
+        cmd.extend(["--parallel_mode", parallel_mode])
     
     result = subprocess.run(cmd, check=True)
     return result.returncode == 0
@@ -373,6 +375,26 @@ def main():
         help="Number of devices",
     )
     
+    # Parallel execution
+    parser.add_argument(
+        "--parallel",
+        action="store_true",
+        help="Use parallel execution for probe training (~3x faster)",
+    )
+    parser.add_argument(
+        "--parallel_workers",
+        type=int,
+        default=3,
+        help="Number of parallel workers (default: 3)",
+    )
+    parser.add_argument(
+        "--parallel_mode",
+        type=str,
+        default="pooling",
+        choices=["pooling", "layer", "all"],
+        help="Parallelization mode (default: pooling)",
+    )
+    
     args = parser.parse_args()
     
     # Create output directory
@@ -386,6 +408,8 @@ def main():
     print(f"Pooling strategies: {args.pooling_strategies}")
     if args.resume:
         print("Resume mode: ON (will skip completed experiments)")
+    if args.parallel:
+        print(f"Parallel mode: ON ({args.parallel_mode}, {args.parallel_workers} workers)")
     print("="*60 + "\n")
     
     # Step 1: Layer search
