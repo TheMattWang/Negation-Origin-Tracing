@@ -141,6 +141,8 @@ This will:
 3. Run causal interventions on top layers
 4. Generate interpretation report
 
+**🔄 Resume from Checkpoint:** If your experiment is interrupted (e.g., Colab disconnect), simply re-run the same command. The script will automatically skip completed experiments and continue from where it left off. See [`RESUME_GUIDE.md`](RESUME_GUIDE.md) for details.
+
 ### Automated Layer Search
 
 Search across all layers to find where negation is represented:
@@ -154,6 +156,21 @@ python src/scripts/search_layers.py \
 ```
 
 This trains probes on all layers and saves results for analysis.
+
+**Resume capability:** Results are saved after each experiment. If interrupted, re-run the same command to continue.
+
+**⚡ Faster with Parallel Execution:** Run 3 pooling strategies in parallel (~3x speedup):
+
+```bash
+python src/scripts/search_layers_parallel.py \
+    --output_dir experiments/layer_search \
+    --layers all \
+    --pooling_strategies all \
+    --parallel_workers 3 \
+    --parallel_mode pooling
+```
+
+See [`PARALLEL_EXECUTION_GUIDE.md`](PARALLEL_EXECUTION_GUIDE.md) for details on parallel execution modes and performance optimization.
 
 ### Training Individual Models
 
@@ -330,6 +347,32 @@ View training metrics:
 ```bash
 tensorboard --logdir experiments/runs
 ```
+
+### Resume from Checkpoint
+
+All experiment scripts now support automatic checkpointing and resume functionality. If your experiment is interrupted (Colab disconnect, timeout, crash), you can simply re-run the same command and it will pick up where it left off.
+
+**How it works:**
+- Results are saved after each completed experiment
+- On restart, the script loads existing results and skips completed work
+- No data loss from interruptions
+
+**Example:**
+```bash
+# First run (completes 12 out of 18 experiments before interruption)
+python src/scripts/run_full_experiment.py --output_dir experiments/my_exp
+
+# After interruption, run the SAME command
+python src/scripts/run_full_experiment.py --output_dir experiments/my_exp
+# Will automatically resume and run only the remaining 6 experiments
+```
+
+**For Google Colab:**
+1. Save to Google Drive: `--output_dir /content/drive/MyDrive/experiments/my_exp`
+2. After disconnection: Remount Drive and re-run the same command
+3. Script automatically resumes from checkpoint
+
+See [`RESUME_GUIDE.md`](RESUME_GUIDE.md) for detailed instructions and troubleshooting.
 
 ### Key Scripts
 

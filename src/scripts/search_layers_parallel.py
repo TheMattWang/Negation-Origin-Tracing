@@ -1,6 +1,6 @@
 """
-Automated layer search script.
-Trains probes on all layers with different pooling strategies and saves results.
+Parallelized automated layer search script.
+Trains probes on multiple layers/pooling strategies in parallel.
 """
 
 import os
@@ -14,6 +14,9 @@ from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
 from lightning.pytorch.loggers import TensorBoardLogger
 from transformers import AutoModel
 import pandas as pd
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from multiprocessing import Manager
+import threading
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -37,6 +40,7 @@ def train_probe_for_layer(
 ):
     """
     Train a probe for a specific layer and pooling strategy.
+    This function is designed to be called in parallel.
     
     Args:
         layer_idx: Layer index to probe
@@ -107,7 +111,7 @@ def train_probe_for_layer(
     # Initialize trainer
     trainer = L.Trainer(
         max_epochs=args.max_epochs,
-        devices=args.devices,
+        devices=1,  # Each parallel worker uses 1 device
         precision=args.precision,
         logger=logger,
         callbacks=callbacks,
@@ -130,9 +134,7 @@ def train_probe_for_layer(
     
     if not has_test_labels:
         # Test set has no ground truth (e.g., SST-2 test set with -1 labels)
-        # Still run test set for inference, but use validation set for metrics
-        print(f"  ⚠ Test set has no ground truth labels (-1), running inference anyway")
-        print(f"  → Using validation set metrics as test metrics")
+        print(f"  ⚠ Test set has no ground truth labels (-1), using validation metrics")
         
         # Run test set (will generate predictions but no metrics)
         trainer.test(
@@ -155,7 +157,7 @@ def train_probe_for_layer(
             "layer_idx": layer_idx,
             "pooling_strategy": pooling_strategy,
             "checkpoint_path": checkpoint_callback.best_model_path,
-            "test_accuracy": val_result.get("val_acc", 0.0),  # Use val metrics as test
+            "test_accuracy": val_result.get("val_acc", 0.0),
             "test_auroc": val_result.get("val_auroc", 0.0),
             "test_loss": val_result.get("val_loss", float('inf')),
             "val_accuracy": val_result.get("val_acc", 0.0),
@@ -171,7 +173,6 @@ def train_probe_for_layer(
             ckpt_path="best",
             verbose=False,
         )
-        # Extract metrics
         test_result = test_results[0] if test_results else {}
         result = {
             "layer_idx": layer_idx,
@@ -180,7 +181,7 @@ def train_probe_for_layer(
             "test_accuracy": test_result.get("test_acc", 0.0),
             "test_auroc": test_result.get("test_auroc", 0.0),
             "test_loss": test_result.get("test_loss", float('inf')),
-            "val_accuracy": test_result.get("val_acc", 0.0),  # May not be in test_results
+            "val_accuracy": test_result.get("val_acc", 0.0),
             "val_auroc": test_result.get("val_auroc", 0.0),
             "experiment_dir": experiment_dir,
         }
@@ -192,9 +193,25 @@ def train_probe_for_layer(
     return result
 
 
+def train_probe_wrapper(args_tuple):
+    """Wrapper for parallel execution."""
+    layer_idx, pooling_strategy, args, base_output_dir = args_tuple
+    try:
+        return train_probe_for_layer(layer_idx, pooling_strategy, args, base_output_dir)
+    except Exception as e:
+        print(f"✗ Error training layer {layer_idx}, {pooling_strategy}: {e}")
+        return {
+            "layer_idx": layer_idx,
+            "pooling_strategy": pooling_strategy,
+            "error": str(e),
+            "test_accuracy": 0.0,
+            "test_auroc": 0.0,
+        }
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Automated layer search: train probes on all layers"
+        description="Parallelized automated layer search: train probes on multiple layers in parallel"
     )
     
     # Get base parser arguments
@@ -236,6 +253,19 @@ def main():
         action="store_true",
         help="Start fresh, ignoring any existing results",
     )
+    parser.add_argument(
+        "--parallel_workers",
+        type=int,
+        default=3,
+        help="Number of parallel workers (default: 3 for 3 pooling strategies)",
+    )
+    parser.add_argument(
+        "--parallel_mode",
+        type=str,
+        default="pooling",
+        choices=["pooling", "layer", "all"],
+        help="Parallelization mode: 'pooling' (parallel pooling per layer), 'layer' (parallel layers), 'all' (both)",
+    )
     
     # Parse layer search specific args
     layer_search_args = parser.parse_args(remaining)
@@ -264,6 +294,8 @@ def main():
     
     print(f"Pooling strategies: {pooling_strategies}")
     print(f"Output directory: {args.output_dir}")
+    print(f"Parallel workers: {args.parallel_workers}")
+    print(f"Parallel mode: {args.parallel_mode}")
     
     # Create output directory
     os.makedirs(args.output_dir, exist_ok=True)
@@ -305,7 +337,6 @@ def main():
         if (layer, pooling) not in completed_experiments
     ]
     
-    current_experiment = len(completed_experiments)
     remaining = len(experiments_to_run)
     
     print(f"\n{'='*60}")
@@ -317,37 +348,91 @@ def main():
     if remaining == 0:
         print("✓ All experiments already completed!")
     else:
-        for layer_idx, pooling_strategy in experiments_to_run:
-            current_experiment += 1
-            print(f"\n[{current_experiment}/{total_experiments}] ", end="")
+        # Thread-safe lock for saving results
+        save_lock = threading.Lock()
+        
+        if args.parallel_mode == "pooling":
+            # Parallelize pooling strategies for each layer
+            print("Mode: Parallelizing pooling strategies per layer")
             
-            try:
-                result = train_probe_for_layer(
-                    layer_idx=layer_idx,
-                    pooling_strategy=pooling_strategy,
-                    args=args,
-                    base_output_dir=args.output_dir,
-                )
-                all_results.append(result)
+            for layer_idx in layers_to_search:
+                # Get pooling strategies to run for this layer
+                layer_experiments = [
+                    (layer_idx, pooling, args, args.output_dir)
+                    for pooling in pooling_strategies
+                    if (layer_idx, pooling) in experiments_to_run
+                ]
                 
-                # Save results after each experiment (for crash recovery)
-                with open(results_json_path, "w") as f:
-                    json.dump(all_results, f, indent=2)
+                if not layer_experiments:
+                    continue
+                
+                print(f"\n{'='*60}")
+                print(f"Layer {layer_idx}: Running {len(layer_experiments)} pooling strategies in parallel")
+                print(f"{'='*60}")
+                
+                # Run pooling strategies in parallel for this layer
+                with ProcessPoolExecutor(max_workers=min(args.parallel_workers, len(layer_experiments))) as executor:
+                    futures = {executor.submit(train_probe_wrapper, exp): exp for exp in layer_experiments}
                     
-            except Exception as e:
-                print(f"✗ Error training layer {layer_idx}, {pooling_strategy}: {e}")
-                result = {
-                    "layer_idx": layer_idx,
-                    "pooling_strategy": pooling_strategy,
-                    "error": str(e),
-                    "test_accuracy": 0.0,
-                    "test_auroc": 0.0,
-                }
-                all_results.append(result)
+                    for future in as_completed(futures):
+                        result = future.result()
+                        
+                        with save_lock:
+                            all_results.append(result)
+                            # Save after each completed experiment
+                            with open(results_json_path, "w") as f:
+                                json.dump(all_results, f, indent=2)
+        
+        elif args.parallel_mode == "layer":
+            # Parallelize layers (run multiple layers in parallel)
+            print("Mode: Parallelizing layers")
+            
+            # Prepare all experiments
+            all_experiments = [
+                (layer, pooling, args, args.output_dir)
+                for layer, pooling in experiments_to_run
+            ]
+            
+            # Run in parallel
+            with ProcessPoolExecutor(max_workers=args.parallel_workers) as executor:
+                futures = {executor.submit(train_probe_wrapper, exp): exp for exp in all_experiments}
                 
-                # Save even error results
-                with open(results_json_path, "w") as f:
-                    json.dump(all_results, f, indent=2)
+                completed_count = len(completed_experiments)
+                for future in as_completed(futures):
+                    result = future.result()
+                    completed_count += 1
+                    
+                    print(f"\n[{completed_count}/{total_experiments}] Completed")
+                    
+                    with save_lock:
+                        all_results.append(result)
+                        # Save after each completed experiment
+                        with open(results_json_path, "w") as f:
+                            json.dump(all_results, f, indent=2)
+        
+        else:  # "all" mode
+            # Maximum parallelization - run everything in parallel
+            print("Mode: Maximum parallelization (all experiments in parallel)")
+            
+            all_experiments = [
+                (layer, pooling, args, args.output_dir)
+                for layer, pooling in experiments_to_run
+            ]
+            
+            with ProcessPoolExecutor(max_workers=args.parallel_workers) as executor:
+                futures = {executor.submit(train_probe_wrapper, exp): exp for exp in all_experiments}
+                
+                completed_count = len(completed_experiments)
+                for future in as_completed(futures):
+                    result = future.result()
+                    completed_count += 1
+                    
+                    print(f"\n[{completed_count}/{total_experiments}] Completed")
+                    
+                    with save_lock:
+                        all_results.append(result)
+                        with open(results_json_path, "w") as f:
+                            json.dump(all_results, f, indent=2)
     
     # Save final results
     print(f"\n{'='*60}")

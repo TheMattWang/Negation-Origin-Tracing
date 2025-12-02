@@ -89,12 +89,58 @@ config['output_dir'] = '/content/drive/MyDrive/experiments'
 !git push
 ```
 
+## Resume from Checkpoint (NEW!)
+
+**All experiments now support automatic resume!** If your Colab session disconnects or times out, you can simply re-run the same command and it will pick up where it left off.
+
+### How It Works
+- Results are saved after **each completed experiment**
+- On restart, the script loads existing results and skips completed work
+- No data loss from interruptions
+
+### After Disconnection
+1. **Reconnect to Colab** (Runtime → Reconnect)
+2. **Remount Google Drive**:
+   ```python
+   from google.colab import drive
+   drive.mount('/content/drive')
+   ```
+3. **Re-run the exact same command** - it will resume automatically
+
+### Example
+```python
+# First run (completes 12 out of 18 experiments before disconnect)
+!python src/scripts/run_full_experiment.py \
+    --output_dir /content/drive/MyDrive/experiments/my_exp
+
+# After reconnecting, run the SAME command
+!python src/scripts/run_full_experiment.py \
+    --output_dir /content/drive/MyDrive/experiments/my_exp
+# Will automatically resume and run only the remaining 6 experiments
+```
+
+### Check Progress
+```python
+import json
+
+# Load results
+with open('/content/drive/MyDrive/experiments/my_exp/results_summary.json', 'r') as f:
+    results = json.load(f)
+
+# Count completed
+completed = sum(1 for r in results if 'error' not in r and r.get('test_auroc', 0) > 0)
+print(f"Progress: {completed}/{len(results)} experiments completed")
+```
+
+See [`RESUME_GUIDE.md`](RESUME_GUIDE.md) for detailed instructions.
+
 ## Tips
 
 1. **Long Experiments**: Use Colab Pro for longer runtimes (12+ hours)
 2. **Data Persistence**: Mount Google Drive to save data between sessions
 3. **Checkpoints**: Save model checkpoints to Drive to resume training
 4. **Monitoring**: Use TensorBoard or print statements to monitor progress
+5. **Resume Support**: Don't worry about disconnections - experiments can resume automatically!
 
 ## Troubleshooting
 
