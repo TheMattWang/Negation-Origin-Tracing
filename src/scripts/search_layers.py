@@ -305,6 +305,28 @@ def main():
         if (layer, pooling) not in completed_experiments
     ]
     
+    # Check for partially completed experiments (have checkpoints but no results)
+    # Prioritize these to complete them first
+    partially_completed = []
+    not_started = []
+    
+    for layer, pooling in experiments_to_run:
+        experiment_name = f"layer_{layer}_pooling_{pooling}"
+        experiment_dir = os.path.join(args.output_dir, experiment_name)
+        checkpoint_dir = os.path.join(experiment_dir, "checkpoints")
+        
+        # Check if checkpoints exist
+        if os.path.exists(checkpoint_dir) and os.listdir(checkpoint_dir):
+            partially_completed.append((layer, pooling))
+        else:
+            not_started.append((layer, pooling))
+    
+    # Prioritize partially completed experiments first
+    experiments_to_run = partially_completed + not_started
+    
+    if partially_completed:
+        print(f"✓ Found {len(partially_completed)} partially completed experiments (will run first)")
+    
     current_experiment = len(completed_experiments)
     remaining = len(experiments_to_run)
     

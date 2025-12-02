@@ -12,7 +12,18 @@ The experiment scripts now automatically save progress after each completed expe
 
 1. **After each layer/pooling experiment completes**, results are saved to `results_summary.json`
 2. **On restart**, the script reads this file and identifies which experiments are already done
-3. **Only remaining experiments** are executed
+3. **Partially completed experiments** (with checkpoints but no results) are prioritized first
+4. **Only remaining experiments** are executed
+
+### Smart Prioritization
+
+The resume logic is smart about which experiments to run first:
+
+1. **Completed experiments** - Skipped entirely ✓
+2. **Partially completed** - Run first (have checkpoints, need final results) 🔄
+3. **Not started** - Run last (no checkpoints yet) ⏳
+
+This ensures you complete in-progress work before starting new experiments.
 
 ### What Gets Saved
 
