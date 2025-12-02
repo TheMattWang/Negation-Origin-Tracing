@@ -8,6 +8,15 @@ import sys
 from pathlib import Path
 import json
 import argparse
+import multiprocessing
+
+# Set multiprocessing start method to 'spawn' for CUDA compatibility
+# This MUST be done before importing torch/CUDA libraries
+try:
+    multiprocessing.set_start_method('spawn', force=True)
+except RuntimeError:
+    pass  # Already set
+
 import torch
 import lightning as L
 from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
@@ -15,7 +24,6 @@ from lightning.pytorch.loggers import TensorBoardLogger
 from transformers import AutoModel
 import pandas as pd
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from multiprocessing import Manager
 import threading
 
 # Add project root to path
