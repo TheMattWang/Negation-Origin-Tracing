@@ -59,13 +59,17 @@ for layer in 0 1 2 3 4 5; do
 import os, sys, json, warnings
 warnings.filterwarnings('ignore')
 
+# Enable tqdm in Colab/notebooks
+os.environ['TQDM_DISABLE'] = '0'
+
 import torch
 torch.set_num_threads(1)
 
 import lightning as L
-from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
+from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping, TQDMProgressBar
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
+from tqdm.auto import tqdm
 
 sys.path.insert(0, '.')
 from src.models import BaseModule
@@ -97,11 +101,14 @@ test_dl = DataLoader(test_ds, batch_size=$BATCH_SIZE, shuffle=False, num_workers
 ckpt_cb = ModelCheckpoint(dirpath='$CKPT_DIR', filename='best-{val_acc:.3f}', monitor='val_acc', mode='max', save_top_k=1)
 early_cb = EarlyStopping(monitor='val_loss', mode='min', patience=3)
 
+# Progress bar callback for better display
+progress_cb = TQDMProgressBar(refresh_rate=10)
+
 trainer = L.Trainer(
     max_epochs=$MAX_EPOCHS,
     accelerator='auto',
     devices=1,
-    callbacks=[ckpt_cb, early_cb],
+    callbacks=[ckpt_cb, early_cb, progress_cb],
     enable_progress_bar=True,
     enable_model_summary=False,
     logger=False,
@@ -120,7 +127,9 @@ out = {
     'checkpoint': ckpt_cb.best_model_path,
 }
 print('RESULT:' + json.dumps(out))
-" 2>&1 | tee "$LOG"
+" 2>&1 | tee -a "$LOG"
+    
+    # Note: Progress bars display in terminal, logs saved to file
     
     # Extract and save result
     RESULT=$(grep "^RESULT:" "$LOG" | tail -1 | sed 's/^RESULT://')
