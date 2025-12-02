@@ -111,7 +111,7 @@ def train_probe_for_layer(
         callbacks=callbacks,
         log_every_n_steps=50,
         val_check_interval=0.5,
-        enable_progress_bar=False,  # Disable to avoid thread conflicts
+        enable_progress_bar=True,  # Keep enabled - Lightning handles threading
         enable_model_summary=False,
         deterministic=False,
     )
