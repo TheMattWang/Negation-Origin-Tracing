@@ -89,6 +89,8 @@ We evaluate with:
 
 ## Usage
 
+> **⚠️ Important for Colab Users**: If running on Google Colab, see [`COLAB_QUICK_START.md`](COLAB_QUICK_START.md) for deadlock-free execution instructions.
+
 ### Setup
 
 #### Option 1: Local Setup
@@ -114,14 +116,37 @@ We evaluate with:
    %cd Negation-Origin-Tracing
    ```
 
-2. **Run notebooks in order:**
+2. **Install dependencies:**
+   ```python
+   !pip install -q torch lightning transformers datasets pandas pyarrow matplotlib seaborn scikit-learn tqdm tensorboardX
+   ```
+
+3. **Download data:**
+   ```python
+   !python src/data/download.py
+   ```
+
+4. **Run layer search (deadlock-free):**
+   ```python
+   !python src/scripts/search_layers_colab.py \
+       --model_name distilbert-base-uncased \
+       --data_dir data/raw \
+       --output_dir experiments/layer_search \
+       --layers all \
+       --pooling_strategies all \
+       --max_epochs 10
+   ```
+   
+   **⚠️ Important**: Use `search_layers_colab.py` on Colab to avoid deadlocks. See [`COLAB_QUICK_START.md`](COLAB_QUICK_START.md) for details.
+
+**Alternative: Use notebooks** (step-by-step):
    - `notebooks/00_setup_colab.ipynb` - Setup environment and install dependencies
    - `notebooks/01_download_data.ipynb` - Download datasets
    - `notebooks/02_layer_search.ipynb` - Automated layer search
    - `notebooks/03_visualize_results.ipynb` - Generate visualizations
    - `notebooks/04_full_experiment.ipynb` - Complete experiment pipeline
 
-   See `COLAB_SETUP.md` for detailed instructions.
+   See `COLAB_SETUP.md` for detailed notebook instructions.
 
 ### Quick Start: Complete Experiment Pipeline
 
@@ -379,13 +404,55 @@ See [`RESUME_GUIDE.md`](RESUME_GUIDE.md) for detailed instructions and troublesh
 | Script | Purpose |
 |--------|---------|
 | `src/scripts/run_full_experiment.py` | Complete end-to-end pipeline |
-| `src/scripts/search_layers.py` | Automated layer search |
+| `src/scripts/search_layers.py` | Automated layer search (sequential) |
+| `src/scripts/search_layers_colab.py` | **Colab-optimized layer search (deadlock-free)** |
+| `src/scripts/search_layers_parallel.py` | Parallel layer search (multi-GPU) |
 | `src/scripts/train.py` | Train individual models/probes |
 | `src/scripts/run_interventions.py` | Run causal interventions |
 | `src/scripts/test.py` | Evaluate trained models |
 | `src/scripts/predict.py` | Inference on new text |
 | `src/engine/visualization.py` | Generate plots |
 | `src/engine/interpretation.py` | Interpret results |
+
+---
+
+## Troubleshooting
+
+### Deadlocks on Google Colab
+
+**Problem**: Experiments hang or freeze when running on Colab.
+
+**Solution**: Use the Colab-optimized script:
+```bash
+python src/scripts/search_layers_colab.py --layers all
+```
+
+This script automatically:
+- Sets `num_workers=0` (prevents nested multiprocessing deadlocks)
+- Runs experiments sequentially (stable on single GPU)
+- Manages GPU memory efficiently
+- Provides better error handling
+
+**See**: [`COLAB_DEADLOCK_FIX.md`](COLAB_DEADLOCK_FIX.md) for technical details and [`COLAB_QUICK_START.md`](COLAB_QUICK_START.md) for usage guide.
+
+### Out of Memory (OOM) Errors
+
+**Solutions**:
+1. Reduce batch size: `--batch_size 16` (or 8)
+2. Use mixed precision: `--precision 16`
+3. Clear GPU cache between runs:
+   ```python
+   import torch
+   torch.cuda.empty_cache()
+   ```
+
+### Colab Disconnects
+
+**Solution**: Results are auto-saved. Just re-run the same command to resume:
+```bash
+# Automatically resumes from last checkpoint
+python src/scripts/search_layers_colab.py --layers all --output_dir /content/drive/MyDrive/results
+```
 
 ---
 

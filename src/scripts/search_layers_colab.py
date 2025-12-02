@@ -1,6 +1,6 @@
 """
-Parallelized automated layer search script.
-Trains probes on multiple layers/pooling strategies in parallel.
+Colab-optimized layer search script.
+Designed specifically for Google Colab with single GPU to avoid deadlocks.
 """
 
 import os
@@ -8,23 +8,12 @@ import sys
 from pathlib import Path
 import json
 import argparse
-import multiprocessing
-
-# Set multiprocessing start method to 'spawn' for CUDA compatibility
-# This MUST be done before importing torch/CUDA libraries
-try:
-    multiprocessing.set_start_method('spawn', force=True)
-except RuntimeError:
-    pass  # Already set
-
 import torch
 import lightning as L
 from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
 from lightning.pytorch.loggers import TensorBoardLogger
 from transformers import AutoModel
 import pandas as pd
-from concurrent.futures import ProcessPoolExecutor, as_completed
-import threading
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -37,7 +26,8 @@ from src.utils.parser import get_parser
 def set_seed(seed: int):
     """Set random seed for reproducibility."""
     torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 
 def train_probe_for_layer(
@@ -48,7 +38,7 @@ def train_probe_for_layer(
 ):
     """
     Train a probe for a specific layer and pooling strategy.
-    This function is designed to be called in parallel.
+    Optimized for Colab single-GPU environment.
     
     Args:
         layer_idx: Layer index to probe
@@ -71,6 +61,10 @@ def train_probe_for_layer(
     # Set seed for reproducibility
     set_seed(args.seed)
     
+    # Clear GPU cache before starting
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    
     # Initialize model
     model = BaseModule(
         model_name=args.model_name,
@@ -81,12 +75,16 @@ def train_probe_for_layer(
         probe_lr=args.probe_lr,
     )
     
-    # Initialize data module
-    # CRITICAL: Set num_workers=0 to avoid deadlocks in parallel execution
-    # When using ProcessPoolExecutor, each process should not spawn additional workers
-    args_copy = argparse.Namespace(**vars(args))
-    args_copy.num_workers = 0  # Disable DataLoader workers in parallel mode
-    datamodule = NOTDataModule.from_args(args_copy)
+    # Initialize data module with Colab-optimized settings
+    datamodule = NOTDataModule(
+        data_dir=args.data_dir,
+        model_name=args.model_name,
+        batch_size=args.batch_size,
+        num_workers=0,  # CRITICAL: Set to 0 for Colab to avoid deadlocks
+        max_length=getattr(args, 'max_length', 128),
+        use_negation_dataset=getattr(args, 'use_negation_dataset', False),
+        seed=args.seed,
+    )
     datamodule.setup("fit")
     
     # Setup logging
@@ -115,24 +113,22 @@ def train_probe_for_layer(
     early_stop_callback = EarlyStopping(
         monitor="val_loss",
         mode="min",
-        patience=args.patience if hasattr(args, 'patience') else 5,
+        patience=getattr(args, 'patience', 5),
         verbose=False,
     )
     callbacks.append(early_stop_callback)
     
-    # Initialize trainer
-    # CRITICAL: Use devices=1 and disable distributed strategies for parallel execution
-    # Each process gets its own GPU context
+    # Initialize trainer with Colab-optimized settings
     trainer = L.Trainer(
         max_epochs=args.max_epochs,
-        devices=1,  # Each parallel worker uses 1 device
+        devices=1,  # Single GPU
         accelerator="auto",  # Auto-detect GPU/CPU
-        precision=args.precision,
+        precision=getattr(args, 'precision', 32),
         logger=logger,
         callbacks=callbacks,
         log_every_n_steps=50,
         val_check_interval=0.5,
-        enable_progress_bar=False,  # Disable progress bar in parallel to avoid clutter
+        enable_progress_bar=True,
         enable_model_summary=False,
         deterministic=False,
     )
@@ -205,28 +201,16 @@ def train_probe_for_layer(
           f"Test Acc={result['test_accuracy']:.4f}, "
           f"Test AUROC={result['test_auroc']:.4f}")
     
+    # Clear GPU cache after training
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    
     return result
-
-
-def train_probe_wrapper(args_tuple):
-    """Wrapper for parallel execution."""
-    layer_idx, pooling_strategy, args, base_output_dir = args_tuple
-    try:
-        return train_probe_for_layer(layer_idx, pooling_strategy, args, base_output_dir)
-    except Exception as e:
-        print(f"✗ Error training layer {layer_idx}, {pooling_strategy}: {e}")
-        return {
-            "layer_idx": layer_idx,
-            "pooling_strategy": pooling_strategy,
-            "error": str(e),
-            "test_accuracy": 0.0,
-            "test_auroc": 0.0,
-        }
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Parallelized automated layer search: train probes on multiple layers in parallel"
+        description="Colab-optimized layer search: sequential execution with GPU-safe settings"
     )
     
     # Get base parser arguments
@@ -268,19 +252,6 @@ def main():
         action="store_true",
         help="Start fresh, ignoring any existing results",
     )
-    parser.add_argument(
-        "--parallel_workers",
-        type=int,
-        default=3,
-        help="Number of parallel workers (default: 3 for 3 pooling strategies)",
-    )
-    parser.add_argument(
-        "--parallel_mode",
-        type=str,
-        default="pooling",
-        choices=["pooling", "layer", "all"],
-        help="Parallelization mode: 'pooling' (parallel pooling per layer), 'layer' (parallel layers), 'all' (both)",
-    )
     
     # Parse layer search specific args
     layer_search_args = parser.parse_args(remaining)
@@ -289,6 +260,25 @@ def main():
     for key, value in vars(layer_search_args).items():
         if not hasattr(args, key):
             setattr(args, key, value)
+    
+    # Force num_workers=0 for Colab safety
+    args.num_workers = 0
+    
+    print("\n" + "="*60)
+    print("COLAB-OPTIMIZED LAYER SEARCH")
+    print("="*60)
+    print(f"Model: {args.model_name}")
+    print(f"Batch size: {args.batch_size}")
+    print(f"Max epochs: {args.max_epochs}")
+    print(f"DataLoader workers: {args.num_workers} (optimized for Colab)")
+    
+    # Check GPU
+    if torch.cuda.is_available():
+        print(f"GPU: {torch.cuda.get_device_name(0)}")
+        print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
+    else:
+        print("⚠ No GPU detected - training will be slower")
+    print("="*60 + "\n")
     
     # Determine layers to search
     if args.layers == "all":
@@ -309,8 +299,6 @@ def main():
     
     print(f"Pooling strategies: {pooling_strategies}")
     print(f"Output directory: {args.output_dir}")
-    print(f"Parallel workers: {args.parallel_workers}")
-    print(f"Parallel mode: {args.parallel_mode}")
     
     # Create output directory
     os.makedirs(args.output_dir, exist_ok=True)
@@ -374,6 +362,7 @@ def main():
     if partially_completed:
         print(f"✓ Found {len(partially_completed)} partially completed experiments (will run first)")
     
+    current_experiment = len(completed_experiments)
     remaining = len(experiments_to_run)
     
     print(f"\n{'='*60}")
@@ -385,91 +374,41 @@ def main():
     if remaining == 0:
         print("✓ All experiments already completed!")
     else:
-        # Thread-safe lock for saving results
-        save_lock = threading.Lock()
-        
-        if args.parallel_mode == "pooling":
-            # Parallelize pooling strategies for each layer
-            print("Mode: Parallelizing pooling strategies per layer")
+        # Run experiments sequentially (safe for Colab)
+        for layer_idx, pooling_strategy in experiments_to_run:
+            current_experiment += 1
+            print(f"\n[{current_experiment}/{total_experiments}] ", end="")
             
-            for layer_idx in layers_to_search:
-                # Get pooling strategies to run for this layer
-                layer_experiments = [
-                    (layer_idx, pooling, args, args.output_dir)
-                    for pooling in pooling_strategies
-                    if (layer_idx, pooling) in experiments_to_run
-                ]
+            try:
+                result = train_probe_for_layer(
+                    layer_idx=layer_idx,
+                    pooling_strategy=pooling_strategy,
+                    args=args,
+                    base_output_dir=args.output_dir,
+                )
+                all_results.append(result)
                 
-                if not layer_experiments:
-                    continue
+                # Save results after each experiment (for crash recovery)
+                with open(results_json_path, "w") as f:
+                    json.dump(all_results, f, indent=2)
+                    
+            except Exception as e:
+                print(f"✗ Error training layer {layer_idx}, {pooling_strategy}: {e}")
+                import traceback
+                traceback.print_exc()
                 
-                print(f"\n{'='*60}")
-                print(f"Layer {layer_idx}: Running {len(layer_experiments)} pooling strategies in parallel")
-                print(f"{'='*60}")
+                result = {
+                    "layer_idx": layer_idx,
+                    "pooling_strategy": pooling_strategy,
+                    "error": str(e),
+                    "test_accuracy": 0.0,
+                    "test_auroc": 0.0,
+                }
+                all_results.append(result)
                 
-                # Run pooling strategies in parallel for this layer
-                with ProcessPoolExecutor(max_workers=min(args.parallel_workers, len(layer_experiments))) as executor:
-                    futures = {executor.submit(train_probe_wrapper, exp): exp for exp in layer_experiments}
-                    
-                    for future in as_completed(futures):
-                        result = future.result()
-                        
-                        with save_lock:
-                            all_results.append(result)
-                            # Save after each completed experiment
-                            with open(results_json_path, "w") as f:
-                                json.dump(all_results, f, indent=2)
-        
-        elif args.parallel_mode == "layer":
-            # Parallelize layers (run multiple layers in parallel)
-            print("Mode: Parallelizing layers")
-            
-            # Prepare all experiments
-            all_experiments = [
-                (layer, pooling, args, args.output_dir)
-                for layer, pooling in experiments_to_run
-            ]
-            
-            # Run in parallel
-            with ProcessPoolExecutor(max_workers=args.parallel_workers) as executor:
-                futures = {executor.submit(train_probe_wrapper, exp): exp for exp in all_experiments}
-                
-                completed_count = len(completed_experiments)
-                for future in as_completed(futures):
-                    result = future.result()
-                    completed_count += 1
-                    
-                    print(f"\n[{completed_count}/{total_experiments}] Completed")
-                    
-                    with save_lock:
-                        all_results.append(result)
-                        # Save after each completed experiment
-                        with open(results_json_path, "w") as f:
-                            json.dump(all_results, f, indent=2)
-        
-        else:  # "all" mode
-            # Maximum parallelization - run everything in parallel
-            print("Mode: Maximum parallelization (all experiments in parallel)")
-            
-            all_experiments = [
-                (layer, pooling, args, args.output_dir)
-                for layer, pooling in experiments_to_run
-            ]
-            
-            with ProcessPoolExecutor(max_workers=args.parallel_workers) as executor:
-                futures = {executor.submit(train_probe_wrapper, exp): exp for exp in all_experiments}
-                
-                completed_count = len(completed_experiments)
-                for future in as_completed(futures):
-                    result = future.result()
-                    completed_count += 1
-                    
-                    print(f"\n[{completed_count}/{total_experiments}] Completed")
-                    
-                    with save_lock:
-                        all_results.append(result)
-                        with open(results_json_path, "w") as f:
-                            json.dump(all_results, f, indent=2)
+                # Save even error results
+                with open(results_json_path, "w") as f:
+                    json.dump(all_results, f, indent=2)
     
     # Save final results
     print(f"\n{'='*60}")
@@ -495,32 +434,38 @@ def main():
     if len(all_results) > 0:
         df_summary = pd.DataFrame(all_results)
         
-        # Best results by metric
-        print("Best Test Accuracy:")
-        best_acc = df_summary.loc[df_summary['test_accuracy'].idxmax()]
-        print(f"  Layer {best_acc['layer_idx']}, {best_acc['pooling_strategy']}: "
-              f"{best_acc['test_accuracy']:.4f}")
+        # Filter out errors
+        df_valid = df_summary[df_summary['test_auroc'] > 0]
         
-        print("\nBest Test AUROC:")
-        best_auroc = df_summary.loc[df_summary['test_auroc'].idxmax()]
-        print(f"  Layer {best_auroc['layer_idx']}, {best_auroc['pooling_strategy']}: "
-              f"{best_auroc['test_auroc']:.4f}")
-        
-        # Average by layer
-        print("\nAverage Performance by Layer:")
-        layer_avg = df_summary.groupby('layer_idx').agg({
-            'test_accuracy': 'mean',
-            'test_auroc': 'mean'
-        }).round(4)
-        print(layer_avg)
-        
-        # Average by pooling strategy
-        print("\nAverage Performance by Pooling Strategy:")
-        pooling_avg = df_summary.groupby('pooling_strategy').agg({
-            'test_accuracy': 'mean',
-            'test_auroc': 'mean'
-        }).round(4)
-        print(pooling_avg)
+        if len(df_valid) > 0:
+            # Best results by metric
+            print("Best Test Accuracy:")
+            best_acc = df_valid.loc[df_valid['test_accuracy'].idxmax()]
+            print(f"  Layer {best_acc['layer_idx']}, {best_acc['pooling_strategy']}: "
+                  f"{best_acc['test_accuracy']:.4f}")
+            
+            print("\nBest Test AUROC:")
+            best_auroc = df_valid.loc[df_valid['test_auroc'].idxmax()]
+            print(f"  Layer {best_auroc['layer_idx']}, {best_auroc['pooling_strategy']}: "
+                  f"{best_auroc['test_auroc']:.4f}")
+            
+            # Average by layer
+            print("\nAverage Performance by Layer:")
+            layer_avg = df_valid.groupby('layer_idx').agg({
+                'test_accuracy': 'mean',
+                'test_auroc': 'mean'
+            }).round(4)
+            print(layer_avg)
+            
+            # Average by pooling strategy
+            print("\nAverage Performance by Pooling Strategy:")
+            pooling_avg = df_valid.groupby('pooling_strategy').agg({
+                'test_accuracy': 'mean',
+                'test_auroc': 'mean'
+            }).round(4)
+            print(pooling_avg)
+        else:
+            print("⚠ No valid results found")
     
     print(f"\n{'='*60}")
     print("Layer search complete!")

@@ -39,6 +39,7 @@ def train_single_probe(layer_idx, pooling_strategy, args, output_dir):
         "--mode", "probe",
         "--num_labels", str(args.num_labels),
         "--precision", str(args.precision),
+        "--num_workers", "0",  # CRITICAL: Disable DataLoader workers to avoid deadlocks
     ]
     
     # Launch process
@@ -179,42 +180,29 @@ def main():
         print(f"Layer {layer_idx}: Running {len(pooling_strategies_for_layer)} pooling strategies in parallel")
         print(f"{'='*60}\n")
         
-        # Launch processes for this layer (up to max_parallel)
-        processes = {}
+        # Run processes sequentially to avoid GPU conflicts
         for pooling in pooling_strategies_for_layer:
             process = train_single_probe(layer_idx, pooling, args, args.output_dir)
-            processes[pooling] = process
-            time.sleep(2)  # Small delay between launches
-        
-        # Monitor processes and show output
-        while processes:
-            for pooling, process in list(processes.items()):
-                # Read output line by line
-                line = process.stdout.readline()
-                if line:
-                    print(f"[{pooling}] {line.rstrip()}")
-                    sys.stdout.flush()
-                
-                # Check if process finished
-                if process.poll() is not None:
-                    # Process finished
-                    return_code = process.returncode
-                    
-                    # Read any remaining output
-                    for line in process.stdout:
-                        print(f"[{pooling}] {line.rstrip()}")
-                    
-                    if return_code == 0:
-                        print(f"\n✓ Completed: Layer {layer_idx}, {pooling}")
-                        current_experiment += 1
-                        print(f"Progress: {current_experiment}/{total_experiments}\n")
-                    else:
-                        print(f"\n✗ Failed: Layer {layer_idx}, {pooling} (exit code: {return_code})\n")
-                    
-                    sys.stdout.flush()
-                    del processes[pooling]
             
-            time.sleep(0.1)  # Small sleep to avoid busy waiting
+            # Stream output in real-time
+            for line in iter(process.stdout.readline, ''):
+                if line:
+                    print(line.rstrip())
+                    sys.stdout.flush()
+                else:
+                    break
+            
+            # Wait for process to complete
+            return_code = process.wait()
+            
+            if return_code == 0:
+                print(f"\n✓ Completed: Layer {layer_idx}, {pooling}")
+                current_experiment += 1
+                print(f"Progress: {current_experiment}/{total_experiments}\n")
+            else:
+                print(f"\n✗ Failed: Layer {layer_idx}, {pooling} (exit code: {return_code})\n")
+            
+            sys.stdout.flush()
         
         print(f"✓ Layer {layer_idx} complete\n")
     

@@ -162,8 +162,9 @@ echo -e "\n${GREEN}========================================${NC}"
 echo -e "${GREEN}STEP 1: Training probes on base model${NC}"
 echo -e "${GREEN}========================================${NC}\n"
 
-$PYTHON_CMD src/scripts/search_layers_orchestrated.py \
+$PYTHON_CMD src/scripts/search_layers.py \
     --model_name "$BASE_MODEL" \
+    --mode probe \
     --data_dir "$DATA_DIR" \
     --batch_size "$BATCH_SIZE" \
     --max_epochs "$MAX_EPOCHS" \
@@ -173,7 +174,7 @@ $PYTHON_CMD src/scripts/search_layers_orchestrated.py \
     --output_dir "$OUTPUT_DIR/base_probes" \
     --seed 42 \
     --devices "$DEVICES" \
-    --max_parallel 3
+    --num_workers 0
 
 # Check if probe results exist
 PROBE_RESULTS="$OUTPUT_DIR/base_probes/results_summary.json"
