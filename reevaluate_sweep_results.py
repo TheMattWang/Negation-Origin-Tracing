@@ -28,6 +28,9 @@ warnings.filterwarnings('ignore')
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
+# Enable tqdm in Colab/notebooks
+os.environ['TQDM_DISABLE'] = '0'
+
 import torch
 torch.set_num_threads(1)
 
@@ -105,11 +108,12 @@ def load_checkpoint_and_evaluate(
             num_sanity_val_steps=0,
         )
         
-        # Run validation
+        # Run validation (verbose=True to show progress)
+        print(f"    Evaluating on validation set...")
         val_results = trainer.validate(
             model=model,
             dataloaders=val_dl,
-            verbose=False
+            verbose=True
         )
         
         if val_results and len(val_results) > 0:
