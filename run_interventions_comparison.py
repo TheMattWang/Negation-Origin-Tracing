@@ -90,7 +90,9 @@ def run_base_model_interventions(
         print(f"\nLoading probe from checkpoint...")
         model_module = BaseModule.load_from_checkpoint(checkpoint)
         base_model = model_module.backbone
-        probe = model_module.probes.get(f"layer_{layer}", None)
+        # ModuleDict doesn't have .get(), use direct access with error handling
+        probe_key = f"layer_{layer}"
+        probe = model_module.probes[probe_key] if probe_key in model_module.probes else None
     else:
         print(f"\n⚠ Checkpoint not found, using base model without probe")
         base_model = AutoModel.from_pretrained("distilbert-base-uncased")
