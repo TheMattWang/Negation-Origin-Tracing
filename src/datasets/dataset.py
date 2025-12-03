@@ -283,3 +283,106 @@ class NegationPairDataset(Dataset):
         
         return item
 
+
+class NegationTripletDataset(Dataset):
+    """
+    Dataset for JinaAI negation triplets (anchor, entailment, negative).
+    
+    Used for transfer evaluation to test how well probes detect sentiment
+    flips caused by negation.
+    
+    Each item returns:
+    - anchor_input_ids, anchor_attention_mask: Tokenized anchor sentence
+    - negative_input_ids, negative_attention_mask: Tokenized negative sentence
+    - expected_flip: 1 (always, since negative should have opposite sentiment)
+    """
+    
+    def __init__(
+        self,
+        data_path: str,
+        tokenizer: AutoTokenizer,
+        max_length: int = 128,
+        anchor_column: str = "anchor",
+        negative_column: str = "negative",
+    ):
+        """
+        Args:
+            data_path: Path to parquet file containing triplet data
+            tokenizer: HuggingFace tokenizer
+            max_length: Maximum sequence length for tokenization
+            anchor_column: Name of the column containing anchor sentences
+            negative_column: Name of the column containing negative sentences
+        """
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+        self.anchor_column = anchor_column
+        self.negative_column = negative_column
+        
+        # Load data
+        self.data = pd.read_parquet(data_path)
+        
+        # Validate columns exist
+        if anchor_column not in self.data.columns:
+            raise ValueError(
+                f"Column '{anchor_column}' not found. Available: {self.data.columns.tolist()}"
+            )
+        if negative_column not in self.data.columns:
+            raise ValueError(
+                f"Column '{negative_column}' not found. Available: {self.data.columns.tolist()}"
+            )
+        
+        # Store texts
+        self.anchors = self.data[anchor_column].tolist()
+        self.negatives = self.data[negative_column].tolist()
+        
+        print(f"[NegationTripletDataset] Loaded {len(self.anchors)} pairs from {os.path.basename(data_path)}")
+        
+        # Show sample
+        if len(self.anchors) > 0:
+            print(f"  Sample anchor: {self.anchors[0][:60]}...")
+            print(f"  Sample negative: {self.negatives[0][:60]}...")
+    
+    def __len__(self) -> int:
+        return len(self.anchors)
+    
+    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+        """
+        Returns a pair of tokenized sentences (anchor and negative).
+        """
+        anchor_text = str(self.anchors[idx])
+        negative_text = str(self.negatives[idx])
+        
+        # Tokenize anchor
+        anchor_encoding = self.tokenizer(
+            anchor_text,
+            truncation=True,
+            padding="max_length",
+            max_length=self.max_length,
+            return_tensors="pt",
+        )
+        
+        # Tokenize negative
+        negative_encoding = self.tokenizer(
+            negative_text,
+            truncation=True,
+            padding="max_length",
+            max_length=self.max_length,
+            return_tensors="pt",
+        )
+        
+        return {
+            "anchor_input_ids": anchor_encoding["input_ids"].flatten(),
+            "anchor_attention_mask": anchor_encoding["attention_mask"].flatten(),
+            "negative_input_ids": negative_encoding["input_ids"].flatten(),
+            "negative_attention_mask": negative_encoding["attention_mask"].flatten(),
+            "expected_flip": torch.tensor(1, dtype=torch.long),  # Always expect flip
+        }
+    
+    def get_raw_texts(self, idx: int) -> Dict[str, str]:
+        """
+        Returns raw text for a given index (useful for analysis).
+        """
+        return {
+            "anchor": str(self.anchors[idx]),
+            "negative": str(self.negatives[idx]),
+        }

@@ -206,6 +206,30 @@ class TargetedAblation:
         self.model = model
         self.hook_handles = []
     
+    def _get_encoder_layer(self, layer_idx: int):
+        """
+        Get the underlying encoder layer for a variety of HF model wrappers
+        (plain encoders and classification models).
+        """
+        m = self.model
+        # DistilBERT base model or similar
+        if hasattr(m, "transformer"):
+            return m.transformer.layer[layer_idx]
+        # BERT / RoBERTa style encoders
+        if hasattr(m, "encoder"):
+            return m.encoder.layer[layer_idx]
+        # DistilBERT *classification* model: distilbert.transformer.layer
+        if hasattr(m, "distilbert") and hasattr(m.distilbert, "transformer"):
+            return m.distilbert.transformer.layer[layer_idx]
+        # BERT classification model: bert.encoder.layer
+        if hasattr(m, "bert") and hasattr(m.bert, "encoder"):
+            return m.bert.encoder.layer[layer_idx]
+        # RoBERTa classification model: roberta.encoder.layer
+        if hasattr(m, "roberta") and hasattr(m.roberta, "encoder"):
+            return m.roberta.encoder.layer[layer_idx]
+
+        raise ValueError("Could not find transformer/encoder layers in model")
+    
     def zero_out_dimensions(
         self,
         batch: Dict[str, torch.Tensor],
