@@ -66,7 +66,7 @@ comparison_YYYYMMDD_HHMMSS/
 |---------|----------|
 | No GPU in Colab | Runtime → Change runtime type → GPU |
 | Drive not mounted | Run first cell again |
-| Results not in Drive | Check last cell for path, or see COLAB_AUTOMATION_GUIDE.md |
+| Results not in Drive | Check last cell for path, or see COLAB_QUICK_START.md |
 | Colab disconnected | Results still saved to Drive, reconnect and check |
 
 ## Next Steps
@@ -85,10 +85,9 @@ comparison_YYYYMMDD_HHMMSS/
 
 ## Need More Help?
 
-- **Quick overview:** `AUTOMATION_SUMMARY.md`
-- **Detailed guide:** `COLAB_AUTOMATION_GUIDE.md`
-- **Colab setup:** `COLAB_SETUP.md`
-- **Troubleshooting:** `COLAB_AUTOMATION_GUIDE.md` (Troubleshooting section)
+- **Colab setup and troubleshooting:** `COLAB_QUICK_START.md`
+- **Colab detailed setup:** `COLAB_QUICK_START.md`
+- **Resume from checkpoint:** `docs/RESUME_GUIDE.md`
 
 ---
 

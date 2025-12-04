@@ -452,6 +452,6 @@ python src/scripts/search_layers_parallel.py
 
 **See Also:**
 - `RESUME_GUIDE.md` - Resume functionality
-- `README.md` - General usage
-- `COLAB_SETUP.md` - Colab-specific instructions
+- `../README.md` - General usage
+- `../COLAB_QUICK_START.md` - Colab-specific instructions
 

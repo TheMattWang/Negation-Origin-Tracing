@@ -1,6 +1,15 @@
-# Colab Quick Start - Deadlock-Free Execution
+# Colab Quick Start Guide
 
-This guide shows you how to run layer search experiments on Google Colab **without deadlocks**.
+This guide shows you how to run experiments on Google Colab, including setup, execution, and troubleshooting.
+
+## Table of Contents
+1. [Quick Commands](#quick-commands)
+2. [Automated Setup (Recommended)](#automated-setup-recommended)
+3. [Manual Setup](#manual-setup)
+4. [Deadlock-Free Execution](#deadlock-free-execution)
+5. [Parallel Execution](#parallel-execution)
+6. [Resume from Checkpoint](#resume-from-checkpoint)
+7. [Troubleshooting](#troubleshooting)
 
 ## TL;DR - Quick Commands
 
@@ -50,7 +59,62 @@ python src/scripts/search_layers_colab.py \
     --output_dir test_output
 ```
 
-## Complete Colab Notebook Setup
+## Automated Setup (Recommended)
+
+For fully automated experiments, use the notebook:
+
+1. **Upload to Colab:**
+   - Go to [colab.research.google.com](https://colab.research.google.com)
+   - Upload `notebooks/06_run_full_comparison_colab.ipynb`
+   - Enable GPU (Runtime → Change runtime type → GPU)
+
+2. **Run All Cells:**
+   - Click Runtime → Run all
+   - Click "Allow" when Drive asks for permission
+   - Wait for completion (2-4 hours with GPU)
+
+3. **Access Results:**
+   - Results automatically saved to: `Google Drive > My Drive > Negation-Origin-Tracing-Results/`
+   - Download from Drive web interface or sync with desktop app
+
+### Notebook Workflow
+
+If you prefer step-by-step notebooks instead of the automated one:
+
+1. **`00_setup_colab.ipynb`** - Setup environment and install dependencies
+2. **`01_download_data.ipynb`** - Download datasets
+3. **`02_layer_search.ipynb`** - Train probes
+4. **`03_visualize_results.ipynb`** - Generate plots
+5. **`04_full_experiment.ipynb`** - Complete pipeline
+6. **`06_run_full_comparison_colab.ipynb`** - **AUTOMATED: Full experiment with Drive sync**
+
+## Environment Setup
+
+### Enable GPU (Recommended)
+1. Go to Runtime → Change runtime type
+2. Select "GPU" as hardware accelerator
+3. Click Save
+
+### Install Dependencies
+The setup notebook (`00_setup_colab.ipynb`) will:
+- Install PyTorch, Lightning, Transformers, etc.
+- Clone the repository
+- Verify installation
+- Check GPU availability
+
+### File Structure in Colab
+
+After setup, your Colab environment should have:
+```
+/content/
+├── Negation-Origin-Tracing/
+│   ├── src/
+│   ├── notebooks/
+│   ├── data/
+│   └── experiments/
+```
+
+## Manual Setup
 
 ### Step 1: Setup Environment
 
@@ -409,5 +473,5 @@ python src/scripts/search_layers_colab.py --layers all
 
 ---
 
-**Need help?** See `COLAB_DEADLOCK_FIX.md` for detailed technical explanation.
+**Need help?** See [`docs/COLAB_DEADLOCK_FIX.md`](docs/COLAB_DEADLOCK_FIX.md) for detailed technical explanation.
 

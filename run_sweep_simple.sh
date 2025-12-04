@@ -1,5 +1,8 @@
 #!/bin/bash
 # =============================================================================
+# ⚠️ DEPRECATED: This script is kept for compatibility but is no longer recommended.
+# Use `run_layer_sweep.sh` instead, which has better resume support and error handling.
+# =============================================================================
 # Simple Sequential Sweep Script (Deadlock-Safe)
 # =============================================================================
 # Runs experiments one at a time to avoid GPU contention.

@@ -317,7 +317,7 @@ python src/scripts/search_layers_colab.py \
 - `src/scripts/search_layers_parallel.py` - Parallel script (now fixed)
 - `src/scripts/search_layers_orchestrated.py` - Orchestrated script (now fixed)
 - `src/datasets/datamodule.py` - DataModule with configurable num_workers
-- `PARALLEL_KNOWN_ISSUES.md` - Previous known issues (now resolved)
+- All known issues have been resolved (deadlock fixed)
 
 ## Updates
 

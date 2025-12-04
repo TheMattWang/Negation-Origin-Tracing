@@ -150,7 +150,7 @@ We evaluate with:
    - `notebooks/03_visualize_results.ipynb` - Generate visualizations
    - `notebooks/04_full_experiment.ipynb` - Complete experiment pipeline
 
-   See `COLAB_SETUP.md` for detailed notebook instructions.
+   See `COLAB_QUICK_START.md` for detailed notebook instructions.
 
 ### Quick Start: Complete Experiment Pipeline
 
@@ -170,7 +170,7 @@ This will:
 3. Run causal interventions on top layers
 4. Generate interpretation report
 
-**🔄 Resume from Checkpoint:** If your experiment is interrupted (e.g., Colab disconnect), simply re-run the same command. The script will automatically skip completed experiments and continue from where it left off. See [`RESUME_GUIDE.md`](RESUME_GUIDE.md) for details.
+**🔄 Resume from Checkpoint:** If your experiment is interrupted (e.g., Colab disconnect), simply re-run the same command. The script will automatically skip completed experiments and continue from where it left off. See [`docs/RESUME_GUIDE.md`](docs/RESUME_GUIDE.md) for details.
 
 ### Automated Layer Search
 
@@ -199,7 +199,7 @@ python src/scripts/search_layers_parallel.py \
     --parallel_mode pooling
 ```
 
-See [`PARALLEL_EXECUTION_GUIDE.md`](PARALLEL_EXECUTION_GUIDE.md) for details on parallel execution modes and performance optimization.
+See [`docs/PARALLEL_EXECUTION_GUIDE.md`](docs/PARALLEL_EXECUTION_GUIDE.md) for details on parallel execution modes and performance optimization.
 
 ### Training Individual Models
 
@@ -405,6 +405,7 @@ See [`RESUME_GUIDE.md`](RESUME_GUIDE.md) for detailed instructions and troublesh
 
 ### Key Scripts
 
+**Python Scripts:**
 | Script | Purpose |
 |--------|---------|
 | `src/scripts/run_full_experiment.py` | Complete end-to-end pipeline |
@@ -417,6 +418,13 @@ See [`RESUME_GUIDE.md`](RESUME_GUIDE.md) for detailed instructions and troublesh
 | `src/scripts/predict.py` | Inference on new text |
 | `src/engine/visualization.py` | Generate plots |
 | `src/engine/interpretation.py` | Interpret results |
+
+**Shell Scripts:**
+- `run_full_comparison.sh` - Complete experiment pipeline (recommended)
+- `run_layer_sweep.sh` - Layer search across all layers (recommended)
+- `run_sweep_*.sh` - Pooling-specific sweeps (for parallel execution)
+
+See [`SCRIPTS_README.md`](SCRIPTS_README.md) for detailed shell script documentation.
 
 ---
 
@@ -437,7 +445,7 @@ This script automatically:
 - Manages GPU memory efficiently
 - Provides better error handling
 
-**See**: [`COLAB_DEADLOCK_FIX.md`](COLAB_DEADLOCK_FIX.md) for technical details and [`COLAB_QUICK_START.md`](COLAB_QUICK_START.md) for usage guide.
+**See**: [`docs/COLAB_DEADLOCK_FIX.md`](docs/COLAB_DEADLOCK_FIX.md) for technical details and [`COLAB_QUICK_START.md`](COLAB_QUICK_START.md) for usage guide.
 
 ### Out of Memory (OOM) Errors
 

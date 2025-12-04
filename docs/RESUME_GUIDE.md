@@ -2,6 +2,34 @@
 
 This guide explains how to resume experiments that were interrupted (e.g., due to Colab disconnection, timeout, or crashes).
 
+## Quick Start
+
+**What's New?** 🎉 Your experiment scripts now **automatically save progress** and can **resume from where they left off** if interrupted!
+
+**Before:** Colab disconnects → Lost all progress → Had to start over 😢  
+**After:** Colab disconnects → Progress is saved → Just re-run the same command → Continues from where it stopped 🎉
+
+### Basic Usage
+
+```bash
+# First run
+python src/scripts/run_full_experiment.py \
+    --output_dir experiments/my_experiment \
+    --layers all \
+    --pooling_strategies all
+
+# After interruption, run the EXACT SAME command
+python src/scripts/run_full_experiment.py \
+    --output_dir experiments/my_experiment \
+    --layers all \
+    --pooling_strategies all
+```
+
+**That's it!** The script will:
+- ✅ Load your existing results
+- ✅ Skip completed experiments
+- ✅ Continue with remaining experiments
+
 ## Overview
 
 The experiment scripts now automatically save progress after each completed experiment. If your session terminates, you can simply re-run the same command and it will pick up where it left off.

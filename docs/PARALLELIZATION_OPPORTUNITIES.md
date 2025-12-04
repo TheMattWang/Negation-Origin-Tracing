@@ -464,6 +464,6 @@ The parallel probe training gives you the biggest speedup with minimal effort. F
 
 **See Also:**
 - `PARALLEL_EXECUTION_GUIDE.md` - How to use parallel execution
-- `src/scripts/search_layers_parallel.py` - Parallel implementation
+- `../src/scripts/search_layers_parallel.py` - Parallel implementation
 - `RESUME_GUIDE.md` - Resume functionality
 
